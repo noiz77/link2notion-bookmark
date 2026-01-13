@@ -1,6 +1,6 @@
 ## Notion 终极书签助手 (Notion Ultimate Bookmark)
 
-> 这是一个团队内部使用的 Chrome 本地插件，用于解决 Notion 官方书签抓取不全的问题。
+> 这是一个 Chrome 本地插件，用于解决 Notion 官方书签抓取不全的问题。
 > 它能绕过反爬虫限制，自动获取网页信息，并以完美的 Notion Bookmark 样式存入。
 
 ![Notion 终极书签助手预览图](screenshots/preview.png)
