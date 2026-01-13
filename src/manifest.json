@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Notion 终极书签助手",
+  "version": "4.2.0",
+  "description": "链接导入Notion，自动抓取讯息、支持手动备注",
+  "permissions": [
+    "storage",
+    "cookies",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.notion.so/*",
+    "*://*/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "导入书签",
+    "default_icon": {
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "assets/icons/icon128.png"
+  }
+}

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <h3>🐜 Notion 终极书签助手</h3>
+
+    <label>Notion 页面地址</label>
+    <input type="text" id="pageId" placeholder="填写 Share Copy Link 或 Page ID">
+
+    <!-- 批量模式开关 -->
+    <div class="mode-row">
+        <label>批量模式</label>
+        <label class="switch">
+            <input type="checkbox" id="toggleBatchMode">
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <label>导入链接</label>
+    <div id="urlTip" class="tips">*默认模式：自动填充当前页面</div>
+    <textarea id="urls"></textarea>
+
+    <!-- 工具栏（仅批量模式显示） -->
+    <div id="batchTools" class="url-controls hidden">
+        <button id="btnAutoFill" class="tool-btn">⚡ 填充链接</button>
+        <button id="btnClear" class="tool-btn">🗑️ 清空</button>
+    </div>
+
+    <label style="margin-top: 15px;">备注（选填）</label>
+    <div id="captionTip" class="tips">*填写后会显示在bookmark卡片下方</div>
+    <input type="text" id="caption">
+
+    <button id="btnImport">开始导入</button>
+    <div id="status"></div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
