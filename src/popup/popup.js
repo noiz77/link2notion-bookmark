@@ -36,6 +36,18 @@ function filterCover(url, coverUrl) {
     return coverUrl;
 }
 
+// === 辅助函数：清理标题（移除 X/Twitter 未读消息数前缀）===
+function cleanTitle(url, title) {
+    if (!title) return title;
+
+    // 针对 X/Twitter: 移除 "(数字) " 前缀，例如 "(3) Username on X" -> "Username on X"
+    if (url.includes('x.com') || url.includes('twitter.com')) {
+        return title.replace(/^\(\d+\)\s*/, '');
+    }
+
+    return title;
+}
+
 // === 方案A：远程爬虫 (用于批量链接) ===
 async function fetchRemoteMetadata(url) {
     const result = { title: null, description: null, cover: null, icon: null };
@@ -53,7 +65,7 @@ async function fetchRemoteMetadata(url) {
 
         const ogTitle = doc.querySelector('meta[property="og:title"]')?.content;
         const tagTitle = doc.querySelector('title')?.innerText;
-        result.title = ogTitle || tagTitle || url;
+        result.title = cleanTitle(url, ogTitle || tagTitle || url);
 
         const ogDesc = doc.querySelector('meta[property="og:description"]')?.content;
         const metaDesc = doc.querySelector('meta[name="description"]')?.content;
@@ -134,6 +146,9 @@ async function extractCurrentTabMetadata(tabId, url) {
                 }
                 return data.cover;
             })();
+
+            // 清理标题（移除 X/Twitter 未读消息数前缀）
+            data.title = cleanTitle(url, data.title);
 
             console.log("✅ 成功从当前页读取:", data);
             return data;
@@ -372,6 +387,10 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         if (failedUrls.length === 0) {
             document.getElementById('urls').value = "";
             chrome.storage.local.remove('pending_urls');
+
+            // 同时清空备注输入框
+            document.getElementById('caption').value = "";
+            chrome.storage.local.remove('pending_caption');
         }
 
     } catch (err) {
