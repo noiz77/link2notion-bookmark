@@ -139,6 +139,37 @@ input:checked+.slider:after {
     right: auto;
 }
 
+/* 封面图开关相关 */
+.cover-label-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cover-label-group label {
+    margin: 0;
+    font-size: 13px;
+    color: #666;
+}
+
+.no-cover-tip {
+    font-size: 11px;
+    color: #f5a623;
+    background: #fffbe6;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* 开关禁用状态 */
+.switch input:disabled + .slider {
+    background-color: #e0e0e0;
+    cursor: not-allowed;
+}
+
+.switch input:disabled + .slider:before {
+    background-color: #f5f5f5;
+}
+
 /* 分割线 */
 .divider {
     border-bottom: 1px dashed #ddd;
