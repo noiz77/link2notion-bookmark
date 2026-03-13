@@ -9,59 +9,67 @@
 <body>
     <h3>🐜 Notion 导入助手</h3>
 
-    <label>Notion 地址</label>
-    <input type="text" id="pageId" placeholder="填写你有编辑权限的页面地址">
+    <form id="importForm">
+        <label>Notion 地址</label>
+        <input type="text" id="pageId" placeholder="填写你有编辑权限的页面地址">
 
-    <label>导入样式</label>
-    <div class="import-style-group">
-        <label class="style-option">
-            <input type="radio" name="importStyle" value="bookmark" checked>
-            <span>书签</span>
-        </label>
-        <label class="style-option">
-            <input type="radio" name="importStyle" value="tweet">
-            <span>推特长文</span>
-        </label>
-        <label class="style-option">
-            <input type="radio" name="importStyle" value="batch">
-            <span>批量链接</span>
-        </label>
-    </div>
+        <label>导入样式</label>
+        <div class="import-style-group">
+            <label class="style-option">
+                <input type="radio" name="importStyle" value="bookmark" checked>
+                <span>书签</span>
+            </label>
+            <label class="style-option">
+                <input type="radio" name="importStyle" value="tweet">
+                <span>推特长文</span>
+            </label>
+            <label class="style-option">
+                <input type="radio" name="importStyle" value="batch">
+                <span>批量链接</span>
+            </label>
+        </div>
 
-    <div class="divider"></div>
+        <div class="divider"></div>
 
-    <div id="urlSection">
-        <div class="section-header" id="urlSectionHeader">
-            <label id="urlLabel">网页链接</label>
-            <!-- 封面控制（书签模式） -->
-            <div id="coverControl" class="cover-control hidden">
-                <span id="noCoverTip" class="no-cover-tip hidden">该网页无封面图</span>
-                <span id="coverText">封面图:</span>
-                <label class="switch">
-                    <input type="checkbox" id="toggleCover">
-                    <span class="slider"></span>
-                </label>
+        <div id="urlSection">
+            <div class="section-header" id="urlSectionHeader">
+                <label id="urlLabel">网页链接</label>
+                <!-- 封面控制（书签模式） -->
+                <div id="coverControl" class="cover-control hidden">
+                    <span id="noCoverTip" class="no-cover-tip hidden">该网页无封面图</span>
+                    <span id="coverText">封面图:</span>
+                    <label class="switch">
+                        <input type="checkbox" id="toggleCover">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- 批量提示（批量模式） -->
+                <span id="batchUrlTip" class="header-tip hidden">*支持填充多个链接</span>
             </div>
-            <!-- 批量提示（批量模式） -->
-            <span id="batchUrlTip" class="header-tip hidden">*支持填充多个链接</span>
+
+            <textarea id="urls"></textarea>
+
+            <!-- 工具栏（批量模式显示） -->
+            <div id="batchTools" class="url-controls hidden">
+                <button id="btnAutoFill" class="tool-btn" type="button">⚡ 填充链接</button>
+                <button id="btnClear" class="tool-btn" type="button">🗑️ 清空</button>
+            </div>
         </div>
-        
-        <textarea id="urls"></textarea>
 
-        <!-- 工具栏（批量模式显示） -->
-        <div id="batchTools" class="url-controls hidden">
-            <button id="btnAutoFill" class="tool-btn">⚡ 填充链接</button>
-            <button id="btnClear" class="tool-btn">🗑️ 清空</button>
+        <div id="captionSection">
+            <label id="captionLabel">备注（选填）</label>
+            <div id="captionTip" class="tips">*填写后会显示在bookmark卡片下方</div>
+            <input type="text" id="caption">
         </div>
-    </div>
 
-    <div id="captionSection">
-        <label id="captionLabel">备注（选填）</label>
-        <div id="captionTip" class="tips">*填写后会显示在bookmark卡片下方</div>
-        <input type="text" id="caption">
+        <button id="btnImport" type="button">开始导入</button>
+    </form>
+    <div id="importProgress" class="hidden">
+        <div class="progress-track">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div id="progressText" class="progress-text"></div>
     </div>
-
-    <button id="btnImport">开始导入</button>
     <div id="status"></div>
 
     <script src="popup.js"></script>

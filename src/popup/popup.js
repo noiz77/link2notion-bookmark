@@ -1,8 +1,4 @@
 // === 基础工具 ===
-const TWEET_ICONS = ['🌊','🌀','💡','🔥','⚡','🎯','🧠','🌿','🪐','🎲','🔮','🌸','🦋','🗺️','🧩','💎','🚀','🌈','🎪','🍀'];
-function randomTweetIcon() {
-    return TWEET_ICONS[Math.floor(Math.random() * TWEET_ICONS.length)];
-}
 
 function extractUUID(input) {
     if (!input) return null;
@@ -608,6 +604,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// === 进度条辅助函数 ===
+const _importProgress = document.getElementById('importProgress');
+const _progressBar = document.getElementById('progressBar');
+const _progressText = document.getElementById('progressText');
+const _btnImport = document.getElementById('btnImport');
+const _importForm = document.getElementById('importForm');
+const _status = document.getElementById('status');
+let _pendingDismiss = null;
+
+function showProgress(text) {
+    _btnImport.classList.add('hidden');
+    _importProgress.classList.remove('hidden');
+    _progressBar.classList.remove('done');
+    _progressText.classList.remove('done');
+    _progressText.textContent = text;
+}
+
+function updateProgressText(text) {
+    _progressText.textContent = text;
+}
+
+function hideProgress() {
+    _importProgress.classList.add('hidden');
+    _btnImport.classList.remove('hidden');
+    _progressBar.classList.remove('done');
+    _progressText.classList.remove('done');
+}
+
+async function completeProgress(text) {
+    _progressBar.classList.add('done');
+    _progressText.classList.add('done');
+    _progressText.textContent = text;
+    await new Promise(r => setTimeout(r, 2000));
+    hideProgress();
+}
+
 // === 主流程 ===
 document.getElementById('btnImport').addEventListener('click', async () => {
     const rawInput = document.getElementById('pageId').value.trim();
@@ -619,18 +651,18 @@ document.getElementById('btnImport').addEventListener('click', async () => {
     const isTweetMode = selectedStyle === 'tweet';
     const importCoverEnabled = !isBatchMode && !isTweetMode && document.getElementById('toggleCover').checked;
 
-    const status = document.getElementById('status');
-    const btn = document.getElementById('btnImport');
+    if (_pendingDismiss) { _pendingDismiss(); _pendingDismiss = null; }
+    _status.innerText = "";
+    _status.style.color = "";
 
     const cleanId = extractUUID(rawInput);
-    if (!cleanId) { status.innerText = "❌ ID 格式错误"; return; }
+    if (!cleanId) { _status.innerText = "❌ ID 格式错误"; return; }
     const pageId = formatUUID(cleanId);
 
     // === 推文页面模式 ===
     if (isTweetMode) {
-        btn.disabled = true;
-        status.style.color = "blue";
-        status.innerText = "🔍 提取推文内容...";
+        _btnImport.disabled = true;
+        showProgress("🔍 提取推文内容...");
         try {
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             const tab = tabs[0];
@@ -648,10 +680,10 @@ document.getElementById('btnImport').addEventListener('click', async () => {
             const textBlocks = blocks0.filter(b => b.type === 'text').length;
             const imgBlocks = blocks0.filter(b => b.type === 'image').length;
             const preview = blocks0.find(b => b.type === 'text')?.plainText?.slice(0, 25) || '(空)';
-            status.innerText = `${threadData.tweets.length}条 | 段落:${textBlocks} 图:${imgBlocks} | "${preview}"`;
+            updateProgressText(`${threadData.tweets.length}条 | 段落:${textBlocks} 图:${imgBlocks} | "${preview}"`);
             await new Promise(r => setTimeout(r, 3000));
 
-            status.innerText = "📝 创建 Notion 页面...";
+            updateProgressText("📝 创建 Notion 页面...");
             const userId = await getCurrentUserId();
             if (!userId) throw new Error("请先登录 www.notion.so");
 
@@ -660,20 +692,20 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             if (isDatabase && collectionId) {
                 await createDatabasePageFromThread(spaceId, collectionId, schema, threadData, userId, manualCaption);
-                status.innerText = `✅ 已导入至 Database（${threadData.tweets.length} 条推文）`;
+                await completeProgress(`✅ 已导入至 Database（${threadData.tweets.length} 条推文）`);
             } else {
                 await createNotionPageFromThread(spaceId, pageId, threadData, userId, manualCaption);
-                status.innerText = `✅ 已导入 ${threadData.tweets.length} 条推文`;
+                await completeProgress(`✅ 已导入 ${threadData.tweets.length} 条推文`);
             }
-            status.style.color = "green";
             document.getElementById('caption').value = "";
             chrome.storage.local.remove('pending_caption');
         } catch (err) {
             console.error(err);
-            status.innerText = "❌ " + err.message;
-            status.style.color = "red";
+            hideProgress();
+            _status.innerText = "❌ " + err.message;
+            _status.style.color = "red";
         } finally {
-            btn.disabled = false;
+            _btnImport.disabled = false;
         }
         return;
     }
@@ -696,27 +728,42 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     if (targets.length === 0) return;
 
-    status.style.color = "blue";
-    btn.disabled = true;
+    showProgress("🚀 连接中...");
     document.getElementById('urls').readOnly = true;
 
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("请先登录 www.notion.so");
+        const { spaceId, isDatabase } = await getPageInfo(pageId, userId);
 
-        status.innerText = "🚀 连接中...";
-        const spaceId = await getSpaceIdViaLoadChunk(pageId, userId);
+        if (isDatabase) {
+            const styleLabel = isBatchMode ? "批量链接" : "书签";
+            hideProgress();
+            _status.innerText = `⚠️ ${styleLabel}样式与Database不兼容，导入无效`;
+            _status.style.color = "orange";
+            const dismissWarning = () => {
+                _status.innerText = "";
+                _status.style.color = "";
+                _importForm.removeEventListener('input',  dismissWarning);
+                _importForm.removeEventListener('change', dismissWarning);
+                _importForm.removeEventListener('click',  dismissWarning);
+                _pendingDismiss = null;
+            };
+            _pendingDismiss = dismissWarning;
+            _importForm.addEventListener('input',  dismissWarning);
+            _importForm.addEventListener('change', dismissWarning);
+            _importForm.addEventListener('click',  dismissWarning);
+            return;
+        }
 
         let successCount = 0;
         let failedUrls = [];
 
         // 根据模式决定显示文案
-        const showProgress = (step) => {
+        const buildProgressLabel = (step) => {
             if (targets.length === 1) {
-                // 单链接模式：简化文案
                 return step;
             } else {
-                // 批量模式：显示进度
                 return `[${successCount + failedUrls.length + 1}/${targets.length}] ${step}`;
             }
         };
@@ -724,7 +771,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         // 遍历处理链接列表
         for (let i = 0; i < targets.length; i++) {
             const url = targets[i];
-            status.innerText = showProgress("🔍 分析网页...");
+            updateProgressText(buildProgressLabel("🔍 分析网页..."));
 
             let meta;
             // 判断是否为当前标签页
@@ -736,7 +783,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
                 meta = await fetchRemoteMetadata(url);
             }
 
-            status.innerText = showProgress("📝 写入中...");
+            updateProgressText(buildProgressLabel("📝 写入中..."));
 
             try {
                 // 如果开启了封面图导入且有封面图，先创建图片块
@@ -760,7 +807,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             } catch (e) {
                 console.error(e);
-                status.innerText = "⚠️ 写入失败，保留链接...";
+                updateProgressText("⚠️ 写入失败，保留链接...");
 
                 // 记录失败链接，确保它留在 UI 上
                 failedUrls.push(url);
@@ -780,8 +827,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
             await new Promise(r => setTimeout(r, 800));
         }
 
-        status.innerText = targets.length === 1 ? "✅ 导入完成" : `✅ 完成！导入 ${successCount} 个`;
-        status.style.color = "green";
+        await completeProgress(targets.length === 1 ? "✅ 导入完成" : `✅ 完成！导入 ${successCount} 个`);
 
         // 最终清理：如果全部成功（即没有失败的），清空
         if (failedUrls.length === 0) {
@@ -795,10 +841,11 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     } catch (err) {
         console.error(err);
-        status.innerText = "❌ " + err.message;
-        status.style.color = "red";
+        hideProgress();
+        _status.innerText = "❌ " + err.message;
+        _status.style.color = "red";
     } finally {
-        btn.disabled = false;
+        _btnImport.disabled = false;
         document.getElementById('urls').readOnly = false;
     }
 });
@@ -1022,7 +1069,7 @@ async function createDatabasePageFromThread(spaceId, collectionId, schema, threa
     if (threadData.dateISO)    properties[dateProp.key]   = [['‣', [['d', { type: 'date', start_date: threadData.dateISO }]]]];
     if (finalTagsStr)          properties[tagsProp.key]   = [[finalTagsStr]];
 
-    const format = { page_icon: randomTweetIcon() };
+    const format = {};
 
     // 创建 Database 页（parent_table 为 "collection"）
     operations.push({
@@ -1098,8 +1145,7 @@ async function createNotionPageFromThread(spaceId, parentId, threadData, userId,
             id: pageId, type: "page", version: 1, alive: true,
             parent_id: parentId, parent_table: "block", space_id: spaceId,
             created_time: Date.now(), last_edited_time: Date.now(),
-            properties: { title: [[threadData.title || "推文"]] },
-            format: { page_icon: randomTweetIcon() }
+            properties: { title: [[threadData.title || "推文"]] }
         }
     });
     operations.push({
