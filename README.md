@@ -5,7 +5,7 @@
 
 当前版本：**v5.0.0**
 
-![Notion 导入助手预览图](screenshots/preview.png)
+![Notion 导入助手预览图](./screenshots/preview.png)
 
 ## 📦 安装步骤 (Installation)
 
