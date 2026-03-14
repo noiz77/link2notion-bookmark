@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Notion 导入助手",
   "version": "5.0.0",
-  "description": "链接导入Notion，自动抓取讯息、支持手动备注",
+  "description": "链接/文章/推文导入Notion，自动抓取内容、支持手动选择",
   "permissions": [
     "storage",
     "cookies",

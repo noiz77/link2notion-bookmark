@@ -20,6 +20,10 @@
                 <span>书签</span>
             </label>
             <label class="style-option">
+                <input type="radio" name="importStyle" value="article">
+                <span>文章</span>
+            </label>
+            <label class="style-option">
                 <input type="radio" name="importStyle" value="tweet">
                 <span>推特长文</span>
             </label>
@@ -43,6 +47,8 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                <!-- 文章模式提示 -->
+                <span id="articleTip" class="header-tip hidden">*可先框选正文</span>
                 <!-- 批量提示（批量模式） -->
                 <span id="batchUrlTip" class="header-tip hidden">*支持填充多个链接</span>
             </div>

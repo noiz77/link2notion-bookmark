@@ -298,6 +298,268 @@ async function extractXThread(tabId) {
     return null;
 }
 
+// === 文章提取：自动模式（使用 Mozilla Readability） ===
+async function extractArticle(tabId) {
+    // 第一步：注入 Readability.js 库
+    await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['lib/Readability.js']
+    });
+
+    // 第二步：运行提取
+    const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+            // 使用 Readability 提取正文
+            const doc = document.cloneNode(true);
+            const reader = new Readability(doc);
+            const article = reader.parse();
+
+            // 提取元数据（从原始文档）
+            const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.content;
+            const getName = (name) => document.querySelector(`meta[name="${name}"]`)?.content;
+
+            const title = article?.title || getMeta('og:title') || document.title || '';
+            const byline = article?.byline
+                || getName('author')
+                || document.querySelector('[rel="author"]')?.textContent
+                || getMeta('article:author') || '';
+            const dateStr = getMeta('article:published_time')
+                || document.querySelector('time[datetime]')?.getAttribute('datetime')
+                || getName('date') || '';
+            const siteName = article?.siteName || getMeta('og:site_name') || '';
+
+            return {
+                title: title.trim(),
+                content: article?.content || '',
+                byline: (byline || '').trim(),
+                date: dateStr,
+                siteName: siteName.trim(),
+                url: window.location.href,
+                textLength: (article?.textContent || '').trim().length,
+                paragraphCount: article?.content ? (article.content.match(/<p[\s>]/g) || []).length : 0
+            };
+        }
+    });
+
+    if (results?.[0]?.error) throw new Error('提取失败: ' + (results[0].error.message || '未知错误'));
+    return results?.[0]?.result;
+}
+
+// === 文章提取：读取页面上的文字框选内容 ===
+async function extractArticleFromSelection(tabId) {
+    const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+
+            // 将框选内容转为 HTML
+            const range = selection.getRangeAt(0);
+            const fragment = range.cloneContents();
+            const container = document.createElement('div');
+            container.appendChild(fragment);
+
+            // 如果选中内容太短（<50字），视为无效
+            if (container.textContent.trim().length < 50) return null;
+
+            // 对框选结果也进行噪音清理（多列布局下框选容易选到侧边栏）
+            const noiseHintRe = /\b(sidebar|side-bar|widget|recommend|featured|related|comment|share|social|newsletter|subscribe|ad-|ads-|advert|toc|breadcrumb|footer|menu)\b/i;
+            container.querySelectorAll('script, style, noscript, iframe, svg, nav, footer, aside, header').forEach(el => el.remove());
+            container.querySelectorAll('div, section, ul, ol').forEach(el => {
+                const hint = ((el.className || '') + ' ' + (el.id || '')).toLowerCase();
+                if (noiseHintRe.test(hint)) { el.remove(); return; }
+                const text = el.textContent.trim();
+                const links = el.querySelectorAll('a');
+                if (links.length > 5 && text.length < links.length * 50 && text.length < 500) {
+                    el.remove();
+                }
+            });
+
+            // 清理后再检查一次长度
+            if (container.textContent.trim().length < 50) return null;
+
+            const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.content;
+            const getName = (name) => document.querySelector(`meta[name="${name}"]`)?.content;
+
+            return {
+                title: (getMeta('og:title') || document.title || '').trim(),
+                content: container.innerHTML,
+                byline: (getName('author') || document.querySelector('[rel="author"]')?.textContent || getMeta('article:author') || '').trim(),
+                date: getMeta('article:published_time') || document.querySelector('time[datetime]')?.getAttribute('datetime') || '',
+                siteName: (getMeta('og:site_name') || '').trim(),
+                url: window.location.href
+            };
+        }
+    });
+    return results?.[0]?.result;
+}
+
+// === HTML → Notion 块转换 ===
+function htmlToNotionBlocks(html, baseUrl) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const blocks = [];
+
+    // 提取内联富文本（保留加粗、斜体、链接、行内代码）
+    function extractInlineRT(el) {
+        const segments = [];
+        function walk(node, bold, italic) {
+            if (node.nodeType === 3) {
+                const t = node.textContent;
+                if (!t) return;
+                const anns = [];
+                if (bold) anns.push(['b']);
+                if (italic) anns.push(['i']);
+                segments.push(anns.length ? [t, anns] : [t]);
+            } else if (node.nodeName === 'BR') {
+                segments.push(['\n']);
+            } else if (node.nodeName === 'A') {
+                const text = node.textContent || '';
+                if (!text.trim()) return;
+                let href = node.getAttribute('href') || '';
+                if (href && !href.startsWith('http') && !href.startsWith('#') && baseUrl) {
+                    try { href = new URL(href, baseUrl).href; } catch (e) {}
+                }
+                const anns = [];
+                if (bold) anns.push(['b']);
+                if (italic) anns.push(['i']);
+                if (href.startsWith('http')) anns.push(['a', href]);
+                segments.push(anns.length ? [text, anns] : [text]);
+            } else if (node.nodeName === 'CODE') {
+                const text = node.textContent || '';
+                if (text) segments.push([text, [['c']]]);
+            } else if (node.nodeType === 1) {
+                const isBold = bold || ['STRONG', 'B'].includes(node.nodeName);
+                const isItalic = italic || ['EM', 'I'].includes(node.nodeName);
+                for (const child of node.childNodes) walk(child, isBold, isItalic);
+            }
+        }
+        for (const child of el.childNodes) walk(child, false, false);
+        return segments.length ? segments : [[el.textContent || '']];
+    }
+
+    // 解析图片 URL（处理相对路径）
+    function resolveImgSrc(node) {
+        let src = node.getAttribute('src') || '';
+        if (src && !src.startsWith('http') && !src.startsWith('data:') && baseUrl) {
+            try { src = new URL(src, baseUrl).href; } catch (e) {}
+        }
+        return src.startsWith('http') ? src : null;
+    }
+
+    function processNode(node) {
+        if (node.nodeType !== 1) return;
+        const tag = node.nodeName;
+
+        switch (tag) {
+            case 'H1':
+                blocks.push({ type: 'header', richText: extractInlineRT(node) });
+                break;
+            case 'H2':
+                blocks.push({ type: 'sub_header', richText: extractInlineRT(node) });
+                break;
+            case 'H3': case 'H4': case 'H5': case 'H6':
+                blocks.push({ type: 'sub_sub_header', richText: extractInlineRT(node) });
+                break;
+            case 'P': {
+                const imgs = node.querySelectorAll('img');
+                const textContent = node.textContent.trim();
+                // 纯图片段落
+                if (imgs.length > 0 && !textContent) {
+                    for (const img of imgs) {
+                        const src = resolveImgSrc(img);
+                        if (src) blocks.push({ type: 'image', url: src });
+                    }
+                } else if (textContent) {
+                    blocks.push({ type: 'text', richText: extractInlineRT(node) });
+                }
+                break;
+            }
+            case 'UL':
+                for (const li of node.children) {
+                    if (li.nodeName === 'LI') {
+                        blocks.push({ type: 'bulleted_list', richText: extractInlineRT(li) });
+                    }
+                }
+                break;
+            case 'OL':
+                for (const li of node.children) {
+                    if (li.nodeName === 'LI') {
+                        blocks.push({ type: 'numbered_list', richText: extractInlineRT(li) });
+                    }
+                }
+                break;
+            case 'BLOCKQUOTE':
+                // 引用块可能包含多个 <p>，逐一处理
+                if (node.querySelector('p')) {
+                    for (const child of node.children) {
+                        if (child.nodeName === 'P') {
+                            blocks.push({ type: 'quote', richText: extractInlineRT(child) });
+                        }
+                    }
+                } else {
+                    blocks.push({ type: 'quote', richText: extractInlineRT(node) });
+                }
+                break;
+            case 'PRE': {
+                const codeEl = node.querySelector('code');
+                const text = (codeEl || node).textContent || '';
+                const langClass = codeEl?.className?.match(/language-(\w+)/)?.[1] || '';
+                blocks.push({ type: 'code', text, language: langClass || 'Plain Text' });
+                break;
+            }
+            case 'IMG': {
+                const src = resolveImgSrc(node);
+                if (src) blocks.push({ type: 'image', url: src });
+                break;
+            }
+            case 'FIGURE': {
+                const img = node.querySelector('img');
+                if (img) {
+                    const src = resolveImgSrc(img);
+                    if (src) blocks.push({ type: 'image', url: src });
+                    const caption = node.querySelector('figcaption');
+                    if (caption?.textContent?.trim()) {
+                        blocks.push({ type: 'text', richText: [[caption.textContent.trim(), [['i']]]] });
+                    }
+                }
+                break;
+            }
+            case 'HR':
+                blocks.push({ type: 'divider' });
+                break;
+            case 'TABLE': {
+                // 表格简化为文本
+                const text = node.textContent.trim();
+                if (text) blocks.push({ type: 'text', richText: [[text]] });
+                break;
+            }
+            default:
+                // 容器元素递归处理子节点
+                for (const child of node.childNodes) {
+                    if (child.nodeType === 1) {
+                        processNode(child);
+                    } else if (child.nodeType === 3 && child.textContent.trim()) {
+                        blocks.push({ type: 'text', richText: [[child.textContent.trim()]] });
+                    }
+                }
+        }
+    }
+
+    for (const child of doc.body.childNodes) {
+        if (child.nodeType === 1) processNode(child);
+    }
+
+    // 过滤空块
+    return blocks.filter(b => {
+        if (['divider', 'image'].includes(b.type)) return true;
+        if (b.type === 'code') return (b.text || '').trim().length > 0;
+        if (b.richText) return b.richText.map(s => s[0]).join('').trim().length > 0;
+        return false;
+    });
+}
+
 // === 方案B：当前页直读 (专门解决 Twitter/SPA) ===
 async function extractCurrentTabMetadata(tabId, url) {
     try {
@@ -384,6 +646,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const coverText = document.getElementById('coverText');
     const batchUrlTip = document.getElementById('batchUrlTip');
     const batchTools = document.getElementById('batchTools');
+    const articleTip = document.getElementById('articleTip');
 
     const captionSection = document.getElementById('captionSection');
     const captionLabel = document.getElementById('captionLabel');
@@ -457,16 +720,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     const updateUIState = async (style) => {
         // 先隐藏所有条件区域
         coverControl.classList.add('hidden');
+        articleTip.classList.add('hidden');
         batchUrlTip.classList.add('hidden');
         batchTools.classList.add('hidden');
-        
-        if (style === 'tweet') {
+
+        if (style === 'article') {
+            // 文章模式
+            urlSection.classList.remove('hidden');
+            captionSection.classList.remove('hidden');
+            articleTip.classList.remove('hidden');
+            captionLabel.innerText = "标签（选填）";
+            captionTip.classList.add('hidden');
+
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs && tabs[0]) {
+                urlsInput.value = tabs[0].url;
+            }
+            urlsInput.readOnly = true;
+        } else if (style === 'tweet') {
             // 推文页面模式
             urlSection.classList.remove('hidden');
             captionSection.classList.remove('hidden');
             captionLabel.innerText = "标签（选填）";
             captionTip.classList.add('hidden');
-            
+
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tabs && tabs[0]) {
                 urlsInput.value = tabs[0].url;
@@ -481,7 +758,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             captionLabel.innerText = "备注（选填）";
             captionTip.innerText = "*多个链接的情况下，备注会被覆盖";
             captionTip.classList.remove('hidden');
-            
+
             chrome.storage.local.get(['pending_urls'], (res) => {
                 urlsInput.value = res.pending_urls || "";
             });
@@ -495,7 +772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             captionLabel.innerText = "备注（选填）";
             captionTip.innerText = "*填写后会显示在bookmark卡片下方";
             captionTip.classList.remove('hidden');
-            
+
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tabs && tabs[0]) {
                 urlsInput.value = tabs[0].url;
@@ -516,9 +793,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         tweetRadioNode.disabled = true;
     }
 
-    let initialStyle = storageData.import_style || 'bookmark';
-    if (!isTwitterPage && initialStyle === 'tweet') {
-        initialStyle = 'bookmark';
+    // 根据当前页面自动选择导入模式
+    let initialStyle;
+    if (isTwitterPage) {
+        initialStyle = 'tweet';
+    } else {
+        // 非推特页面：尊重用户上次的选择（除了 tweet），默认文章模式
+        const saved = storageData.import_style;
+        initialStyle = (saved && saved !== 'tweet') ? saved : 'article';
     }
 
     let targetRadio = Array.from(styleRadios).find(r => r.value === initialStyle);
@@ -548,6 +830,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chrome.storage.local.set({ 'cover_enabled': e.target.checked });
         updateCoverUI();
     });
+
 
     // 输入同步 Storage
     const ids = ['urls', 'pageId', 'caption'];
@@ -649,7 +932,8 @@ document.getElementById('btnImport').addEventListener('click', async () => {
     const selectedStyle = document.querySelector('input[name="importStyle"]:checked').value;
     const isBatchMode = selectedStyle === 'batch';
     const isTweetMode = selectedStyle === 'tweet';
-    const importCoverEnabled = !isBatchMode && !isTweetMode && document.getElementById('toggleCover').checked;
+    const isArticleMode = selectedStyle === 'article';
+    const importCoverEnabled = !isBatchMode && !isTweetMode && !isArticleMode && document.getElementById('toggleCover').checked;
 
     if (_pendingDismiss) { _pendingDismiss(); _pendingDismiss = null; }
     _status.innerText = "";
@@ -658,6 +942,76 @@ document.getElementById('btnImport').addEventListener('click', async () => {
     const cleanId = extractUUID(rawInput);
     if (!cleanId) { _status.innerText = "❌ ID 格式错误"; return; }
     const pageId = formatUUID(cleanId);
+
+    // === 文章模式 ===
+    if (isArticleMode) {
+        _btnImport.disabled = true;
+
+        try {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            const tab = tabs[0];
+            if (!tab) throw new Error("无法获取当前页面");
+
+            // 优先使用页面上的文字框选，没有则自动提取
+            showProgress("🔍 提取文章内容...");
+            let articleData = await extractArticleFromSelection(tab.id);
+            if (articleData) {
+                updateProgressText("📋 使用已框选内容...");
+            } else {
+                articleData = await extractArticle(tab.id);
+            }
+
+            if (!articleData || !articleData.content) {
+                throw new Error("未能提取到文章内容，请尝试开启手动选择");
+            }
+
+            // 转换 HTML 为 Notion 块
+            const blocks = htmlToNotionBlocks(articleData.content, articleData.url);
+            if (!blocks.length) throw new Error("文章内容为空，请尝试开启手动选择");
+
+            articleData.blocks = blocks;
+            articleData.authorName = articleData.byline || '';
+
+            // 解析日期
+            if (articleData.date) {
+                try {
+                    const d = new Date(articleData.date);
+                    if (!isNaN(d)) articleData.dateISO = d.toISOString().split('T')[0];
+                } catch (e) {}
+            }
+
+            // 显示提取摘要
+            const textCount = blocks.filter(b => ['text', 'header', 'sub_header', 'sub_sub_header', 'quote', 'bulleted_list', 'numbered_list'].includes(b.type)).length;
+            const imgCount = blocks.filter(b => b.type === 'image').length;
+            updateProgressText(`${textCount} 个段落 | ${imgCount} 张图片`);
+            await new Promise(r => setTimeout(r, 2000));
+
+            updateProgressText("📝 创建 Notion 页面...");
+            const userId = await getCurrentUserId();
+            if (!userId) throw new Error("请先登录 www.notion.so");
+
+            const pageInfo = await getPageInfo(pageId, userId);
+            const { spaceId, isDatabase, collectionId, schema } = pageInfo;
+
+            if (isDatabase && collectionId) {
+                await createDatabasePageFromArticle(spaceId, collectionId, schema, articleData, userId, manualCaption);
+                await completeProgress(`✅ 已导入文章至 Database`);
+            } else {
+                await createNotionPageFromArticle(spaceId, pageId, articleData, userId, manualCaption);
+                await completeProgress(`✅ 已导入文章`);
+            }
+            document.getElementById('caption').value = "";
+            chrome.storage.local.remove('pending_caption');
+        } catch (err) {
+            console.error(err);
+            hideProgress();
+            _status.innerText = "❌ " + err.message;
+            _status.style.color = "red";
+        } finally {
+            _btnImport.disabled = false;
+        }
+        return;
+    }
 
     // === 推文页面模式 ===
     if (isTweetMode) {
@@ -1209,6 +1563,206 @@ async function createNotionPageFromThread(spaceId, parentId, threadData, userId,
             }
         }
         if (i < threadData.tweets.length - 1) {
+            addBlock("divider", {});
+        }
+    }
+
+    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
+        body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })
+    });
+    const resText = await res.text();
+    if (!res.ok) throw new Error("创建页面失败: " + resText.slice(0, 100));
+    return pageId;
+}
+
+// === 文章 → Notion Database 页面 ===
+async function createDatabasePageFromArticle(spaceId, collectionId, schema, articleData, userId, tags) {
+    const pageId = uuidv4();
+    const operations = [];
+
+    // 查找或规划属性的 schema key（复用推文的逻辑）
+    const authorProp = findOrPlanSchemaKey(schema, ['Author', '作者', '来源'], 'text');
+    const urlProp    = findOrPlanSchemaKey(schema, ['URL', '链接', 'Link'], 'url');
+    const dateProp   = findOrPlanSchemaKey(schema, ['Date', '日期', '发布日期', '创建时间'], 'date');
+    const tagsProp   = findOrPlanSchemaKey(schema, ['Tags', '标签', 'Tag', 'Labels'], 'multi_select');
+
+    // 处理 tags 的 schema 属性（与推文模式相同）
+    let finalTagsStr = null;
+    if (tags && tags.trim()) {
+        const inputTags = tags.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+        const existingOptions = (!tagsProp.create && schema && schema[tagsProp.key] && schema[tagsProp.key].options) ? schema[tagsProp.key].options : [];
+        const existingValues = existingOptions.map(o => o.value);
+        let newOptions = [...existingOptions];
+        let hasNew = false;
+
+        for (const t of inputTags) {
+            if (!existingValues.includes(t)) {
+                newOptions.push({
+                    id: uuidv4(),
+                    value: t,
+                    color: ['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'][Math.floor(Math.random() * 10)]
+                });
+                hasNew = true;
+            }
+        }
+
+        if (hasNew) {
+            tagsProp.create = true;
+            tagsProp.updatedOptions = newOptions;
+        } else if (tagsProp.create) {
+            tagsProp.updatedOptions = [];
+        }
+
+        if (inputTags.length > 0) finalTagsStr = inputTags.join(',');
+    } else if (tagsProp.create) {
+        tagsProp.updatedOptions = [];
+    }
+
+    // 新建属性写入 collection schema
+    for (const prop of [authorProp, urlProp, dateProp, tagsProp]) {
+        if (prop.create) {
+            const args = { name: prop.name, type: prop.type };
+            if (prop.type === 'multi_select' && prop.updatedOptions) args.options = prop.updatedOptions;
+            operations.push({
+                id: collectionId, table: "collection",
+                path: ["schema", prop.key], command: "update",
+                args
+            });
+        }
+    }
+
+    // 构建 properties
+    const authorLabel = articleData.authorName || articleData.siteName || '';
+    const properties = { title: [[articleData.title || "文章"]] };
+    if (authorLabel)         properties[authorProp.key] = [[authorLabel]];
+    if (articleData.url)     properties[urlProp.key]    = [[articleData.url]];
+    if (articleData.dateISO) properties[dateProp.key]   = [['‣', [['d', { type: 'date', start_date: articleData.dateISO }]]]];
+    if (finalTagsStr)        properties[tagsProp.key]   = [[finalTagsStr]];
+
+    // 创建 Database 页
+    operations.push({
+        id: pageId, table: "block", path: [], command: "set",
+        args: {
+            id: pageId, type: "page", version: 1, alive: true,
+            parent_id: collectionId, parent_table: "collection", space_id: spaceId,
+            created_time: Date.now(), last_edited_time: Date.now(),
+            properties, format: {}
+        }
+    });
+
+    // 写入文章内容块
+    let lastBlockId = null;
+    const addBlock = (type, blockArgs) => {
+        const blockId = uuidv4();
+        operations.push({
+            id: blockId, table: "block", path: [], command: "set",
+            args: {
+                id: blockId, type, version: 1, alive: true,
+                parent_id: pageId, parent_table: "block", space_id: spaceId,
+                created_time: Date.now(), last_edited_time: Date.now(),
+                ...blockArgs
+            }
+        });
+        operations.push({
+            id: pageId, table: "block", path: ["content"], command: "listAfter",
+            args: { after: lastBlockId || uuidv4(), id: blockId }
+        });
+        lastBlockId = blockId;
+    };
+
+    for (const block of (articleData.blocks || [])) {
+        if (['header', 'sub_header', 'sub_sub_header', 'text', 'bulleted_list', 'numbered_list', 'quote'].includes(block.type)) {
+            addBlock(block.type, { properties: { title: block.richText } });
+        } else if (block.type === 'image') {
+            addBlock("image", { properties: { source: [[block.url]] }, format: { display_source: block.url } });
+        } else if (block.type === 'code') {
+            addBlock("code", { properties: { title: [[block.text]], language: [[block.language || 'Plain Text']] } });
+        } else if (block.type === 'divider') {
+            addBlock("divider", {});
+        }
+    }
+
+    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
+        body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })
+    });
+    const resText = await res.text();
+    if (!res.ok) throw new Error("创建 Database 页面失败: " + resText.slice(0, 100));
+    return pageId;
+}
+
+// === 文章 → 独立 Notion 页面 ===
+async function createNotionPageFromArticle(spaceId, parentId, articleData, userId, tags) {
+    const pageId = uuidv4();
+    const operations = [];
+    let lastBlockId = null;
+
+    // 创建子页面
+    operations.push({
+        id: pageId, table: "block", path: [], command: "set",
+        args: {
+            id: pageId, type: "page", version: 1, alive: true,
+            parent_id: parentId, parent_table: "block", space_id: spaceId,
+            created_time: Date.now(), last_edited_time: Date.now(),
+            properties: { title: [[articleData.title || "文章"]] }
+        }
+    });
+    operations.push({
+        id: parentId, table: "block", path: ["content"], command: "listAfter",
+        args: { after: uuidv4(), id: pageId }
+    });
+
+    const addBlock = (type, blockArgs) => {
+        const blockId = uuidv4();
+        operations.push({
+            id: blockId, table: "block", path: [], command: "set",
+            args: {
+                id: blockId, type, version: 1, alive: true,
+                parent_id: pageId, parent_table: "block", space_id: spaceId,
+                created_time: Date.now(), last_edited_time: Date.now(),
+                ...blockArgs
+            }
+        });
+        operations.push({
+            id: pageId, table: "block", path: ["content"], command: "listAfter",
+            args: { after: lastBlockId || uuidv4(), id: blockId }
+        });
+        lastBlockId = blockId;
+    };
+
+    // 元信息头
+    const authorLabel = articleData.authorName || '';
+    if (authorLabel) {
+        addBlock("text", { properties: { title: [["👤 作者："], [authorLabel, [["b"]]]] } });
+    }
+    if (articleData.siteName) {
+        addBlock("text", { properties: { title: [["📰 来源："], [articleData.siteName]] } });
+    }
+    if (articleData.dateISO || articleData.date) {
+        addBlock("text", { properties: { title: [["🗓️ 日期："], [articleData.dateISO || articleData.date]] } });
+    }
+    if (articleData.url) {
+        addBlock("text", { properties: { title: [["🔗 链接："], [articleData.url, [["a", articleData.url]]]] } });
+    }
+    if (tags && tags.trim()) {
+        addBlock("text", { properties: { title: [["🏷️ 标签："], [tags.trim()]] } });
+    }
+    if (authorLabel || articleData.siteName || articleData.dateISO || articleData.url || (tags && tags.trim())) {
+        addBlock("divider", {});
+    }
+
+    // 写入文章内容块
+    for (const block of (articleData.blocks || [])) {
+        if (['header', 'sub_header', 'sub_sub_header', 'text', 'bulleted_list', 'numbered_list', 'quote'].includes(block.type)) {
+            addBlock(block.type, { properties: { title: block.richText } });
+        } else if (block.type === 'image') {
+            addBlock("image", { properties: { source: [[block.url]] }, format: { display_source: block.url } });
+        } else if (block.type === 'code') {
+            addBlock("code", { properties: { title: [[block.text]], language: [[block.language || 'Plain Text']] } });
+        } else if (block.type === 'divider') {
             addBlock("divider", {});
         }
     }
