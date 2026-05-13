@@ -1,7 +1,7 @@
 // 主导入流程：btnImport 点击处理，分发到书签/文章/推特/批量四种模式
 
 import { extractUUID, formatUUID } from './utils/ids.js';
-import { getNotionUrl } from './utils/url.js';
+import { getNotionUrl, isTwitterUrl } from './utils/url.js';
 import { getCurrentUserId } from './utils/user.js';
 import { htmlToNotionBlocks } from './parsers/html-blocks.js';
 import { fetchRemoteMetadata } from './extractors/remote.js';
@@ -123,7 +123,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         try {
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             const tab = tabs[0];
-            if (!tab || (!tab.url.includes('x.com') && !tab.url.includes('twitter.com'))) {
+            if (!tab || !isTwitterUrl(tab.url)) {
                 throw new Error("请先打开一个 X / Twitter 推文页面");
             }
 

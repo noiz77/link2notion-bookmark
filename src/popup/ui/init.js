@@ -3,6 +3,7 @@
 // 依赖大量 DOM 和闭包状态（currentPageCover），保持在 handler 内部而不抽出去
 
 import { extractCurrentTabMetadata } from '../extractors/current-tab.js';
+import { isTwitterUrl } from '../utils/url.js';
 import { showTagSuggestions, hideTagSuggestions, updateTagChipStates } from './tags.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -203,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. 恢复状态并检查是否允许推文模式
     const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const isTwitterPage = activeTabs[0] && (activeTabs[0].url.includes('x.com') || activeTabs[0].url.includes('twitter.com'));
+    const isTwitterPage = activeTabs[0] && isTwitterUrl(activeTabs[0].url);
 
     const tweetRadioNode = Array.from(styleRadios).find(r => r.value === 'tweet');
     if (!isTwitterPage && tweetRadioNode) {
