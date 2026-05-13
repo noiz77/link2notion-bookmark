@@ -2,6 +2,13 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
+## [5.2.4] - 2026-05-13
+
+### Fixed
+- **推特导入样式 URL 识别误判**：推特模式入口与导入前校验改为基于 `hostname` 精确识别 `x.com` / `twitter.com` 及其子域名，避免 `x.com.evil.com`、查询参数包含 `x.com` 等非推特网址误启用「推特」按钮。
+
+---
+
 ## [5.2.3] - 2026-04-27
 
 ### Changed
