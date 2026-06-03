@@ -2,6 +2,16 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
+## [5.2.5] - 2026-06-03
+
+### Fixed
+- **Notion 页面信息读取失败**：Chrome 阻止第三方 Cookie 时，扩展 Popup 直接请求 Notion 内部 API 会得到 `HTTP 200` 但空的 `recordMap.block`，误报为页面 ID 无效。新增统一 `notionFetch`，在已登录的 Notion 标签页中执行同站点请求，覆盖页面读取、Database schema 读取及全部写入操作。
+- **Notion 新域名兼容**：同时识别 `www.notion.so` 与 `app.notion.com` 的登录 Cookie 和标签页，并优先选择与当前用户 ID 匹配的域名，避免迁移期或多账号场景误用其他会话。
+- **页面读取错误诊断不足**：`loadPageChunk` 现在会显示 HTTP 状态、无效响应或页面链接、权限、登录状态提示，便于区分 ID 格式与会话问题。
+- **导入成功态底部被截断**：进度区域从开始导入时预留成功结果、Notion 跳转按钮和倒计时所需高度，避免文章和推特导入成功后动态增高导致底部显示不完整。
+
+---
+
 ## [5.2.4] - 2026-05-13
 
 ### Fixed

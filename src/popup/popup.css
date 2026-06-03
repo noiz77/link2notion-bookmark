@@ -405,6 +405,7 @@ button#btnImport:disabled {
 /* 导入进度条 */
 #importProgress {
     margin-top: 20px;
+    min-height: 92px;
 }
 
 .progress-track {

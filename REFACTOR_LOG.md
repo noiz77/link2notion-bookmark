@@ -99,6 +99,15 @@ src/popup/
 
 **总计**：20 个文件，2120 行（vs 原 2088 行，增加 32 行主要是 import 语句 + 说明注释）。
 
+## 后续维护新增模块
+
+初次模块化完成后，按功能演进继续新增以下模块；截至 v5.2.5，`src/popup` 共 24 个 JavaScript 模块：
+
+- `utils/fetch.js` — 外部抓取统一超时处理
+- `extractors/tweet-syndication.js` — 推文 syndication 元数据抓取
+- `notion/tags.js` — Database 标签写入辅助
+- `notion/api.js` — Notion 内部 API 同站点请求代理
+
 ## 静态检查结果
 
 - ✅ 25 个 import 全部对应存在的 export

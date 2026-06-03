@@ -87,7 +87,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             updateProgressText("📝 创建 Notion 页面...");
             const userId = await getCurrentUserId();
-            if (!userId) throw new Error("请先登录 www.notion.so");
+            if (!userId) throw new Error("请先登录 Notion");
 
             const pageInfo = await getPageInfo(pageId, userId);
             const { spaceId, isDatabase, collectionId, schema } = pageInfo;
@@ -143,7 +143,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             updateProgressText("📝 创建 Notion 页面...");
             const userId = await getCurrentUserId();
-            if (!userId) throw new Error("请先登录 www.notion.so");
+            if (!userId) throw new Error("请先登录 Notion");
 
             const pageInfo = await getPageInfo(pageId, userId);
             const { spaceId, isDatabase, collectionId, schema } = pageInfo;
@@ -196,7 +196,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("请先登录 www.notion.so");
+        if (!userId) throw new Error("请先登录 Notion");
         const { spaceId, isDatabase } = await getPageInfo(pageId, userId);
 
         if (isDatabase) {

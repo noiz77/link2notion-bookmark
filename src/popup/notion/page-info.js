@@ -1,17 +1,33 @@
 // 读取 Notion 页面元信息：spaceId / 是否为 Database / collection 信息 / schema
 
+import { notionFetch } from './api.js';
+
 // 获取页面信息：spaceId + 是否为 Database + collection 信息
 export async function getPageInfo(pageId, userId) {
-    const res = await fetch("https://www.notion.so/api/v3/loadPageChunk", {
+    const res = await notionFetch("loadPageChunk", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({
             "pageId": pageId, "limit": 50, "cursor": { "stack": [] }, "chunkNumber": 0, "verticalColumns": false
         })
     });
-    const data = await res.json();
+    const text = await res.text();
+    if (!res.ok) {
+        throw new Error(`无法读取页面信息 (HTTP ${res.status})${text ? ': ' + text.slice(0, 200) : ''}`);
+    }
+
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        throw new Error(`无法读取页面信息：Notion 返回了无效响应${text ? ' (' + text.slice(0, 100) + ')' : ''}`);
+    }
+
     const blockData = data.recordMap?.block?.[pageId];
-    if (!blockData?.value) throw new Error("无法读取页面信息，请检查 ID");
+    if (!blockData?.value) {
+        const detail = data.message || data.error || data.name;
+        throw new Error(`无法读取页面信息，请确认页面链接、访问权限和 Notion 登录状态${detail ? ': ' + detail : ''}`);
+    }
 
     const val = blockData.value;
 
@@ -71,7 +87,7 @@ export async function getPageInfo(pageId, userId) {
 
 export async function loadCollectionSchema(collectionId, spaceId, userId) {
     try {
-        const res = await fetch("https://www.notion.so/api/v3/syncRecordValues", {
+        const res = await notionFetch("syncRecordValues", {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
             body: JSON.stringify({
