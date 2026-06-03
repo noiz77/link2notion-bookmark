@@ -4,6 +4,7 @@ import { uuidv4 } from '../utils/ids.js';
 import { findSchemaKey } from './schema.js';
 import { buildTagsForDatabase } from './tags.js';
 import { parseTextBlockToNotionBlocks } from '../parsers/markdown.js';
+import { notionFetch } from './api.js';
 
 // 将单个推文 block 写入 Notion 页面（统一 Database / 普通页面两处写入）
 export function writeTweetBlockToNotion(block, addBlock) {
@@ -89,7 +90,7 @@ export async function createDatabasePageFromThread(spaceId, collectionId, schema
         if (i < threadData.tweets.length - 1) addBlock("divider", {});
     }
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })
@@ -169,7 +170,7 @@ export async function createNotionPageFromThread(spaceId, parentId, threadData, 
         }
     }
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })

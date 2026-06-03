@@ -1,6 +1,7 @@
 // Notion 书签块 + 图片块写入
 
 import { uuidv4 } from '../utils/ids.js';
+import { notionFetch } from './api.js';
 
 export async function createFullBookmark(spaceId, parentId, meta, url, userId, caption) {
     const newBlockId = uuidv4();
@@ -34,7 +35,7 @@ export async function createFullBookmark(spaceId, parentId, meta, url, userId, c
         }
     ];
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ "requestId": uuidv4(), "transactions": [{ "id": uuidv4(), "spaceId": spaceId, "operations": operations }] })
@@ -75,7 +76,7 @@ export async function createImageBlock(spaceId, parentId, imageUrl, userId) {
         }
     ];
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ "requestId": uuidv4(), "transactions": [{ "id": uuidv4(), "spaceId": spaceId, "operations": operations }] })

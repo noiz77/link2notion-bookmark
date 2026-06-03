@@ -3,6 +3,7 @@
 import { uuidv4 } from '../utils/ids.js';
 import { findSchemaKey } from './schema.js';
 import { buildTagsForDatabase } from './tags.js';
+import { notionFetch } from './api.js';
 
 export async function createDatabasePageFromArticle(spaceId, collectionId, schema, articleData, userId, tags) {
     const pageId = uuidv4();
@@ -69,7 +70,7 @@ export async function createDatabasePageFromArticle(spaceId, collectionId, schem
         }
     }
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })
@@ -153,7 +154,7 @@ export async function createNotionPageFromArticle(spaceId, parentId, articleData
         }
     }
 
-    const res = await fetch("https://www.notion.so/api/v3/saveTransactions", {
+    const res = await notionFetch("saveTransactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-notion-active-user-header": userId },
         body: JSON.stringify({ requestId: uuidv4(), transactions: [{ id: uuidv4(), spaceId, operations }] })
