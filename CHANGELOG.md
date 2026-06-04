@@ -2,6 +2,17 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
+## [5.2.6] - 2026-06-04
+
+### Fixed
+- **微信公众号文章正文抓取增强**：文章模式在 `mp.weixin.qq.com` 页面优先读取 `#js_content`，并从微信页面字段提取标题、公众号名和发布日期，避免通用 Readability 漏抓或误抓。
+- **微信文章图片与视频占位**：支持 `data-src` / `data-original` / `data-backsrc` 懒加载图片；遇到不支持的视频、iframe、embed 或 object 时，用 `[ ▶️ 此处视频无法获取 ]` 文本块占位，保留微信页面自带的时长说明。
+- **微信文章特殊样式导致折行**：对 `section` / `span` / `font` 等微信排版容器增加内联段落合并逻辑，避免特殊符号、装饰节点和正文被拆成多个 Notion 段落。
+- **引用上标噪音清理**：跳过短数字型 `sup` / citation / footnote 引用标注，避免右上角研究引用被导入为孤立的 `123` 文本。
+
+### Changed
+- **文章解析更保守地保留结构**：图文混排段落会拆成正文与图片块；多段样式容器不会被粗暴合并成一个大段，降低微信复杂排版的回归风险。
+
 ## [5.2.5] - 2026-06-03
 
 ### Fixed
