@@ -2,6 +2,13 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
+## [5.2.7] - 2026-06-04
+
+### Fixed
+- **部分用户提示“无法获取当前页面”**：新增 `tabs` 权限，并统一当前标签页获取逻辑。文章、推特、书签和初始化预填会依次尝试当前窗口、最近聚焦窗口、所有活动标签页和普通窗口兜底，降低不同窗口焦点状态下拿不到当前页面的概率。
+- **Notion 会话读取兼容**：Notion 用户 ID 读取不再只依赖 `chrome.cookies`，当 Cookie API 读不到 `notion_user_id` 时，会在已登录的 Notion 页面上下文中读取 `document.cookie`，并进一步调用 Notion 页面内的 `getSpaces` 推断当前用户；Notion API 请求内部也会在缺少 active user header 时自动补齐，减少返回空 `recordMap` 的概率。
+- **Notion 权限/API 问题诊断**：遇到页面读取、权限、登录态或 Notion 内部 API 异常时，错误区会提供「复制诊断信息」按钮。诊断报告不包含 cookie/token，只记录浏览器环境、Notion 标签页状态、用户 ID 是否可推断、`getSpaces` 与 `loadPageChunk` 的 HTTP 状态和 `recordMap` 计数，便于快速定位问题。
+
 ## [5.2.6] - 2026-06-04
 
 ### Fixed
