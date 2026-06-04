@@ -3,6 +3,7 @@
 // 依赖大量 DOM 和闭包状态（currentPageCover），保持在 handler 内部而不抽出去
 
 import { extractCurrentTabMetadata } from '../extractors/current-tab.js';
+import { getActiveTab } from '../utils/tabs.js';
 import { isTwitterUrl } from '../utils/url.js';
 import { showTagSuggestions, hideTagSuggestions, updateTagChipStates } from './tags.js';
 
@@ -83,11 +84,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === 辅助函数：检测当前页面封面图 ===
     const checkCurrentPageCover = async () => {
         try {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tabs || !tabs[0]) return;
+            const tab = await getActiveTab();
+            if (!tab) return;
 
-            const url = tabs[0].url;
-            const tabId = tabs[0].id;
+            const url = tab.url;
+            const tabId = tab.id;
 
             if (isRestrictedUrl(url)) {
                 toggleCover.disabled = true;
@@ -149,9 +150,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             captionLabelText.innerText = "备注";
             setCaptionInfo("选填项，填写后会作为文字说明填充在 bookmark 的卡片下方");
 
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs && tabs[0]) {
-                urlsInput.value = tabs[0].url;
+            const tab = await getActiveTab();
+            if (tab) {
+                urlsInput.value = tab.url;
             }
             urlsInput.readOnly = false;
 
@@ -177,10 +178,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             captionLabelText.innerText = "标签";
             setCaptionInfo("选填项，多个用「,」分隔。写入 Database 时填入 Tags / 标签 多选列（自动新增缺失选项）；普通页面则前置在文章顶部信息栏");
 
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs && tabs[0]) {
-                urlsInput.value = tabs[0].url;
-                showTagSuggestions(tabs[0].title);
+            const tab = await getActiveTab();
+            if (tab) {
+                urlsInput.value = tab.url;
+                showTagSuggestions(tab.title);
             }
             urlsInput.readOnly = true;
         } else if (style === 'tweet') {
@@ -190,10 +191,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             captionLabelText.innerText = "标签";
             setCaptionInfo("选填项，多个用「,」分隔。写入 Database 时填入 Tags / 标签 多选列（自动新增缺失选项）；普通页面则前置在推文顶部信息栏");
 
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs && tabs[0]) {
-                urlsInput.value = tabs[0].url;
-                showTagSuggestions(tabs[0].title);
+            const tab = await getActiveTab();
+            if (tab) {
+                urlsInput.value = tab.url;
+                showTagSuggestions(tab.title);
             }
             urlsInput.readOnly = true;
         } else {
@@ -203,8 +204,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 2. 恢复状态并检查是否允许推文模式
-    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const isTwitterPage = activeTabs[0] && isTwitterUrl(activeTabs[0].url);
+    const activeTab = await getActiveTab();
+    const isTwitterPage = activeTab && isTwitterUrl(activeTab.url);
 
     const tweetRadioNode = Array.from(styleRadios).find(r => r.value === 'tweet');
     if (!isTwitterPage && tweetRadioNode) {
@@ -284,9 +285,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnAutoFill) {
         btnAutoFill.addEventListener('click', async () => {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs && tabs[0]) {
-                const currentUrl = tabs[0].url;
+            const tab = await getActiveTab();
+            if (tab) {
+                const currentUrl = tab.url;
                 let val = urlsInput.value.trimEnd();
 
                 if (val.length > 0) {

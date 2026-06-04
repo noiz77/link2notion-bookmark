@@ -2,6 +2,7 @@
 
 import { extractUUID, formatUUID } from './utils/ids.js';
 import { getNotionUrl, isTwitterUrl } from './utils/url.js';
+import { getActiveTab } from './utils/tabs.js';
 import { getCurrentUserId } from './utils/user.js';
 import { htmlToNotionBlocks } from './parsers/html-blocks.js';
 import { fetchRemoteMetadata } from './extractors/remote.js';
@@ -12,6 +13,7 @@ import { getPageInfo } from './notion/page-info.js';
 import { createFullBookmark, createImageBlock } from './notion/bookmark.js';
 import { createDatabasePageFromThread, createNotionPageFromThread } from './notion/tweet-writer.js';
 import { createDatabasePageFromArticle, createNotionPageFromArticle } from './notion/article-writer.js';
+import { buildNotionDiagnostics } from './notion/diagnostics.js';
 import { showProgress, updateProgressText, hideProgress, completeProgress } from './ui/progress.js';
 
 // ESM 模块顶层执行时 DOM 已就绪
@@ -19,6 +21,81 @@ const _btnImport = document.getElementById('btnImport');
 const _importForm = document.getElementById('importForm');
 const _status = document.getElementById('status');
 let _pendingDismiss = null;
+
+function isNotionAccessError(error) {
+    const message = error?.message || '';
+    return /Notion|页面信息|登录|权限|loadPageChunk|saveTransactions|syncRecordValues|recordMap|active user|HTTP 401|HTTP 403/i.test(message);
+}
+
+async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+}
+
+async function showErrorWithDiagnostics(error, pageId) {
+    _status.textContent = '';
+    _status.style.color = 'red';
+
+    const message = document.createElement('div');
+    message.textContent = `❌ ${error.message}`;
+    _status.appendChild(message);
+
+    if (!pageId || !isNotionAccessError(error)) return;
+
+    const links = document.createElement('div');
+    links.className = 'notion-login-links';
+    links.appendChild(document.createTextNode('先确认 Notion 已登录：'));
+    for (const [label, url] of [['www.notion.so', 'https://www.notion.so'], ['app.notion.com', 'https://app.notion.com']]) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = label;
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            chrome.tabs.create({ url });
+        });
+        links.appendChild(link);
+    }
+    _status.appendChild(links);
+
+    const hint = document.createElement('div');
+    hint.className = 'diagnostic-hint';
+    hint.textContent = '正在生成 Notion 诊断信息...';
+    _status.appendChild(hint);
+
+    try {
+        const report = await buildNotionDiagnostics(pageId);
+        hint.textContent = 'Notion 权限或 API 异常，可复制诊断信息反馈。';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'diagnostic-btn';
+        button.textContent = '复制诊断信息';
+        button.addEventListener('click', async () => {
+            try {
+                await copyText(report);
+                button.textContent = '已复制';
+            } catch (copyError) {
+                console.error(copyError);
+                button.textContent = '复制失败';
+            }
+        });
+        _status.appendChild(button);
+    } catch (diagnosticError) {
+        console.warn('[link2notion] 生成 Notion 诊断信息失败:', diagnosticError);
+        hint.textContent = `诊断信息生成失败：${diagnosticError.message}`;
+    }
+}
 
 document.getElementById('btnImport').addEventListener('click', async () => {
     const rawInput = document.getElementById('pageId').value.trim();
@@ -47,8 +124,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         _btnImport.disabled = true;
 
         try {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            const tab = tabs[0];
+            const tab = await getActiveTab();
             if (!tab) throw new Error("无法获取当前页面");
 
             // 优先使用页面上的文字框选，没有则自动提取
@@ -87,7 +163,6 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             updateProgressText("📝 创建 Notion 页面...");
             const userId = await getCurrentUserId();
-            if (!userId) throw new Error("请先登录 Notion");
 
             const pageInfo = await getPageInfo(pageId, userId);
             const { spaceId, isDatabase, collectionId, schema } = pageInfo;
@@ -108,8 +183,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         } catch (err) {
             console.error(err);
             hideProgress();
-            _status.innerText = "❌ " + err.message;
-            _status.style.color = "red";
+            await showErrorWithDiagnostics(err, pageId);
         } finally {
             _btnImport.disabled = false;
         }
@@ -121,8 +195,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         _btnImport.disabled = true;
         showProgress("🔍 提取推文内容...");
         try {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            const tab = tabs[0];
+            const tab = await getActiveTab();
             if (!tab || !isTwitterUrl(tab.url)) {
                 throw new Error("请先打开一个 X / Twitter 推文页面");
             }
@@ -143,7 +216,6 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
             updateProgressText("📝 创建 Notion 页面...");
             const userId = await getCurrentUserId();
-            if (!userId) throw new Error("请先登录 Notion");
 
             const pageInfo = await getPageInfo(pageId, userId);
             const { spaceId, isDatabase, collectionId, schema } = pageInfo;
@@ -165,8 +237,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
         } catch (err) {
             console.error(err);
             hideProgress();
-            _status.innerText = "❌ " + err.message;
-            _status.style.color = "red";
+            await showErrorWithDiagnostics(err, pageId);
         } finally {
             _btnImport.disabled = false;
         }
@@ -180,8 +251,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
     }
 
     // 2. 获取当前 Tab 信息（用于比对和兜底）
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const currentTab = tabs[0];
+    const currentTab = await getActiveTab();
     const currentTabUrl = currentTab ? currentTab.url : null;
 
     // 如果列表为空，默认导入当前页 (兜底逻辑，即便自动填充关闭，留空也应能工作)
@@ -196,7 +266,6 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("请先登录 Notion");
         const { spaceId, isDatabase } = await getPageInfo(pageId, userId);
 
         if (isDatabase) {
@@ -309,8 +378,7 @@ document.getElementById('btnImport').addEventListener('click', async () => {
     } catch (err) {
         console.error(err);
         hideProgress();
-        _status.innerText = "❌ " + err.message;
-        _status.style.color = "red";
+        await showErrorWithDiagnostics(err, pageId);
     } finally {
         _btnImport.disabled = false;
         document.getElementById('urls').readOnly = false;

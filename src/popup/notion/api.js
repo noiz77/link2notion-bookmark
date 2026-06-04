@@ -2,85 +2,23 @@
 // 用户阻止第三方 Cookie 时，扩展 popup 直接 fetch 不会带上 Notion 会话；
 // 改在已打开的 Notion 标签页中执行同站点请求。
 
-const NOTION_TAB_PATTERNS = [
-    "https://www.notion.so/*",
-    "https://app.notion.com/*"
-];
-
-const NOTION_ORIGINS = [
-    "https://www.notion.so",
-    "https://app.notion.com"
-];
-
-function waitForTabComplete(tabId, timeoutMs = 15000) {
-    return new Promise((resolve, reject) => {
-        let settled = false;
-        const finish = (callback, value) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timeoutId);
-            chrome.tabs.onUpdated.removeListener(onUpdated);
-            callback(value);
-        };
-
-        const timeoutId = setTimeout(() => {
-            finish(reject, new Error("Notion 页面加载超时，请打开 Notion 页面后重试"));
-        }, timeoutMs);
-
-        const onUpdated = (updatedTabId, changeInfo, tab) => {
-            if (updatedTabId !== tabId || changeInfo.status !== "complete") return;
-            finish(resolve, tab);
-        };
-
-        chrome.tabs.onUpdated.addListener(onUpdated);
-        chrome.tabs.get(tabId).then(tab => {
-            if (tab.status === "complete") finish(resolve, tab);
-        }).catch(error => finish(reject, error));
-    });
-}
+import { getNotionTab, getTabOrigin } from './session.js';
 
 function getActiveUserId(options) {
     const headers = options.headers || {};
     return headers["x-notion-active-user-header"] || headers["X-Notion-Active-User-Header"] || null;
 }
 
-async function getPreferredOrigins(userId) {
-    if (!userId) return [];
+function normalizeRequestOptions(options) {
+    const requestOptions = { ...options };
+    const headers = { ...(requestOptions.headers || {}) };
 
-    const matches = [];
-    for (const origin of NOTION_ORIGINS) {
-        const cookie = await chrome.cookies.get({ url: origin, name: "notion_user_id" });
-        if (cookie?.value === userId) matches.push(origin);
+    for (const key of ["x-notion-active-user-header", "X-Notion-Active-User-Header"]) {
+        if (!headers[key]) delete headers[key];
     }
-    return matches;
-}
 
-function getTabOrigin(tab) {
-    try {
-        return tab.url ? new URL(tab.url).origin : null;
-    } catch (e) {
-        return null;
-    }
-}
-
-async function getNotionTab(userId) {
-    const preferredOrigins = await getPreferredOrigins(userId);
-    const tabs = await chrome.tabs.query({ url: NOTION_TAB_PATTERNS });
-    const orderedTabs = [
-        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab))),
-        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)))
-    ];
-
-    const readyTab = orderedTabs.find(tab => tab.id && tab.status === "complete");
-    if (readyTab) return readyTab;
-
-    const loadingTab = orderedTabs.find(tab => tab.id);
-    if (loadingTab) return waitForTabComplete(loadingTab.id);
-
-    const createdTab = await chrome.tabs.create({ url: preferredOrigins[0] || NOTION_ORIGINS[0], active: false });
-    if (!createdTab.id) throw new Error("无法打开 Notion 页面");
-    if (createdTab.status === "complete") return createdTab;
-    return waitForTabComplete(createdTab.id);
+    requestOptions.headers = headers;
+    return requestOptions;
 }
 
 export async function notionFetch(path, options = {}) {
@@ -98,11 +36,40 @@ export async function notionFetch(path, options = {}) {
         throw new Error("无法识别 Notion 页面地址，请刷新 Notion 页面后重试");
     }
 
+    const requestOptions = normalizeRequestOptions(options);
+
     const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: async (url, requestOptions) => {
+            async function inferActiveUserId() {
+                const cookieMatch = document.cookie.match(/(?:^|;\s*)notion_user_id=([^;]+)/);
+                if (cookieMatch?.[1]) return decodeURIComponent(cookieMatch[1]);
+
+                try {
+                    const res = await fetch(`${location.origin}/api/v3/getSpaces`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: "{}"
+                    });
+                    const data = await res.json();
+                    const notionUsers = data.notion_user || data.recordMap?.notion_user || {};
+                    const firstUserId = Object.keys(notionUsers)[0];
+                    if (firstUserId) return firstUserId;
+                } catch (e) {}
+
+                return null;
+            }
+
+            const headers = { ...(requestOptions.headers || {}) };
+            if (!headers["x-notion-active-user-header"] && !headers["X-Notion-Active-User-Header"]) {
+                const userId = await inferActiveUserId();
+                if (userId) headers["x-notion-active-user-header"] = userId;
+            }
+
             const response = await fetch(url, {
                 ...requestOptions,
+                headers,
                 credentials: "include"
             });
             return {
@@ -112,7 +79,7 @@ export async function notionFetch(path, options = {}) {
                 body: await response.text()
             };
         },
-        args: [`${origin}/api/v3/${path}`, options]
+        args: [`${origin}/api/v3/${path}`, requestOptions]
     });
 
     const result = results[0]?.result;

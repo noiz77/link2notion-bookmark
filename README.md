@@ -53,9 +53,10 @@
 * 该工具深度依赖 Notion 的未公开/内部 v3 API（比如 `saveTransactions`）。一旦 Notion 后台改变表结构或 API 名称，插件也许会抛出错误并停止工作。这时需检查 `popup/notion/` 下的请求与写入模块。
 
 ### 二、 常见故障与修复 (Troubleshooting)
-1. **无法抓取：提示 "请先登录 Notion"**
-* 原因：新授权或系统清理过 cookie 导致 Notion 的身份凭证会话已失效。
-* 解决：新开标签页访问 `www.notion.so` 或 `app.notion.com`，确认您的左侧边栏出现内容后再重试即可。
+1. **无法读取页面信息 / 提示登录或权限异常**
+* 原因：Notion 登录会话失效、当前账号没有目标页面编辑权限，或 Notion 内部 v3 API 临时调整。
+* 解决：新开标签页访问 `www.notion.so` 或 `app.notion.com`，确认左侧边栏出现内容；再打开目标 Notion 页面，确认当前账号可编辑后重试。
+* 反馈：如果仍失败，点击错误区的「复制诊断信息」并提交给维护者。诊断信息不包含 cookie/token，只包含浏览器环境、Notion 标签页状态、用户 ID 是否可推断、`getSpaces` / `loadPageChunk` 状态和 `recordMap` 计数。
   
 2. **连接异常：报错 "数据异常"**
 * 原因：填写的地址格式无法被提取。
