@@ -283,12 +283,12 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     try {
         const userId = await getCurrentUserId();
-        const { spaceId, isDatabase } = await getPageInfo(pageId, userId);
+        const { spaceId, canAcceptChildBlocks } = await getPageInfo(pageId, userId);
 
-        if (isDatabase) {
+        if (!canAcceptChildBlocks) {
             const styleLabel = isBatchMode ? "批量书签" : "书签";
             hideProgress();
-            _status.innerText = `⚠️ ${styleLabel}样式与Database不兼容，导入无效`;
+            _status.innerText = `⚠️ ${styleLabel}不能直接导入到 Database 视图，请选择普通页面或 Database 中的单个页面`;
             _status.style.color = "orange";
             const dismissWarning = () => {
                 _status.innerText = "";

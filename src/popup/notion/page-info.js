@@ -56,6 +56,7 @@ export async function getPageInfo(pageId, userId) {
     // Database 检测：block 自身类型 或 parent_table 为 collection（数据库行）
     const blockType = val.type;
     const parentTable = val.parent_table;
+    const canAcceptChildBlocks = blockType === 'page';
     let isDatabase = ['collection_view_page', 'collection_view'].includes(blockType);
     let collectionId = val.collection_id || null;
 
@@ -90,7 +91,7 @@ export async function getPageInfo(pageId, userId) {
         console.log("[link2notion] Database schema 字段:", fields.length ? fields : "(未读取到 schema)");
     }
 
-    return { spaceId, isDatabase, collectionId, schema };
+    return { spaceId, isDatabase, collectionId, schema, canAcceptChildBlocks };
 }
 
 export async function loadCollectionSchema(collectionId, spaceId, userId) {
