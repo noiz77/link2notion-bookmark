@@ -110,6 +110,7 @@ async function loadModules(moduleNames) {
 
 test("getCurrentUserId follows the selected Notion tab instead of a stale cross-origin cookie", async () => {
     const { modules } = await loadModules([
+        "notion/page-context.js",
         "notion/session.js",
         "utils/user.js"
     ]);
@@ -120,6 +121,7 @@ test("getCurrentUserId follows the selected Notion tab instead of a stale cross-
 
 test("notionFetch aligns the active-user header in the same page-script round trip", async () => {
     const { modules, getCapturedRequest, getExecuteScriptCount } = await loadModules([
+        "notion/page-context.js",
         "notion/session.js",
         "notion/api.js"
     ]);

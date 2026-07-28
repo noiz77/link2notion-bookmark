@@ -107,6 +107,8 @@ src/popup/
 - `extractors/tweet-syndication.js` — 推文 syndication 元数据抓取
 - `notion/tags.js` — Database 标签写入辅助
 - `notion/api.js` — Notion 内部 API 同站点请求代理
+- `notion/page-context.js` — Notion 页面上下文中的用户推断与同站点请求执行
+- `ui/notion-error.js` — Notion 错误卡片、恢复帮助入口与诊断复制交互
 
 ## 静态检查结果
 

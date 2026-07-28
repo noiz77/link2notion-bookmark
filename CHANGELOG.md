@@ -11,6 +11,7 @@ All notable changes to the **Notion 导入助手 (Notion Import Assistant)** pro
 
 ### Internal
 - 新增跨域 Cookie 不一致的会话回归测试，以及恢复帮助页内容与入口检查。
+- 集中 Notion 页面上下文注入逻辑，读取当前用户和发送同站点请求复用同一实现；错误卡片、帮助页跳转与诊断复制从主流程抽离到独立 UI 模块。
 
 ## [5.2.7] - 2026-06-04
 

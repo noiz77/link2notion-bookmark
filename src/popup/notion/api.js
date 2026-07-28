@@ -3,6 +3,7 @@
 // 改在已打开的 Notion 标签页中执行同站点请求。
 
 import { getNotionTab, getTabOrigin } from './session.js';
+import { requestFromNotionPage } from './page-context.js';
 
 function getActiveUserId(options) {
     const headers = options.headers || {};
@@ -38,52 +39,11 @@ export async function notionFetch(path, options = {}) {
 
     const requestOptions = normalizeRequestOptions(options);
 
-    const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: async (url, requestOptions) => {
-            async function inferActiveUserId() {
-                const cookieMatch = document.cookie.match(/(?:^|;\s*)notion_user_id=([^;]+)/);
-                if (cookieMatch?.[1]) return decodeURIComponent(cookieMatch[1]);
-
-                try {
-                    const res = await fetch(`${location.origin}/api/v3/getSpaces`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "include",
-                        body: "{}"
-                    });
-                    const data = await res.json();
-                    const notionUsers = data.notion_user || data.recordMap?.notion_user || {};
-                    const firstUserId = Object.keys(notionUsers)[0];
-                    if (firstUserId) return firstUserId;
-                } catch (e) {}
-
-                return null;
-            }
-
-            const headers = { ...(requestOptions.headers || {}) };
-            const pageUserId = await inferActiveUserId();
-            if (pageUserId) {
-                headers["x-notion-active-user-header"] = pageUserId;
-                delete headers["X-Notion-Active-User-Header"];
-            }
-
-            const response = await fetch(url, {
-                ...requestOptions,
-                headers,
-                credentials: "include"
-            });
-            return {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Array.from(response.headers.entries()),
-                body: await response.text()
-            };
-        },
-        args: [`${origin}/api/v3/${path}`, requestOptions]
-    });
-
-    const result = results[0]?.result;
+    const result = await requestFromNotionPage(
+        tab,
+        `${origin}/api/v3/${path}`,
+        requestOptions
+    );
     if (!result) {
         throw new Error("无法通过 Notion 页面发送请求，请刷新 Notion 页面后重试");
     }

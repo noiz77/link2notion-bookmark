@@ -1,12 +1,13 @@
 // 从 cookie 读取当前 Notion 用户 ID
 
-import { getNotionTab, getNotionTabUserId, getTabOrigin, NOTION_ORIGINS } from '../notion/session.js';
+import { getNotionPageUserId } from '../notion/page-context.js';
+import { getNotionTab, getTabOrigin, NOTION_ORIGINS } from '../notion/session.js';
 
 export async function getCurrentUserId() {
     let tab = null;
     try {
         tab = await getNotionTab();
-        const tabUserId = await getNotionTabUserId(tab);
+        const tabUserId = await getNotionPageUserId(tab);
         if (tabUserId) return tabUserId;
     } catch (e) {
         console.warn("[link2notion] 无法从 Notion 页面读取用户 ID:", e);
