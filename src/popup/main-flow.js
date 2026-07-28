@@ -9,7 +9,7 @@ import { fetchRemoteMetadata } from './extractors/remote.js';
 import { extractCurrentTabMetadata } from './extractors/current-tab.js';
 import { extractArticle, extractArticleFromSelection } from './extractors/article.js';
 import { extractXThread } from './extractors/tweet.js';
-import { getPageInfo } from './notion/page-info.js';
+import { getPageInfo, NOTION_SESSION_VALIDATION_FAILED } from './notion/page-info.js';
 import { createFullBookmark, createImageBlock } from './notion/bookmark.js';
 import { createDatabasePageFromThread, createNotionPageFromThread } from './notion/tweet-writer.js';
 import { createDatabasePageFromArticle, createNotionPageFromArticle } from './notion/article-writer.js';
@@ -47,7 +47,7 @@ async function showErrorWithDiagnostics(error, pageId) {
     _status.textContent = '';
     _status.style.color = '';
 
-    const isSessionValidationError = error?.code === 'NOTION_SESSION_VALIDATION_FAILED';
+    const isSessionValidationError = error?.code === NOTION_SESSION_VALIDATION_FAILED;
     if (isSessionValidationError) {
         const card = document.createElement('div');
         card.className = 'notion-session-card';

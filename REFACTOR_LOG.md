@@ -244,7 +244,8 @@ import './main-flow.js';
 |---|---|---|---|
 | 1 | 书签模式 + 普通页面 + 封面开 | 封面 + bookmark 卡片 | ⬜ |
 | 2 | 书签模式 + 封面关 | 仅 bookmark | ⬜ |
-| 3 | 书签模式 + Database 页面 | 显示"与 Database 不兼容"警告 | ⬜ |
+| 3a | 书签模式 + Database 视图 | 提示选择普通页面或 Database 中的单个页面 | ⬜ |
+| 3b | 书签模式 + Database 单页 | bookmark 写入该页面正文 | ✅ Chrome 真实环境验证 |
 | 4 | 文章模式 + 普通页面（Readability 自动）| 段落/图片/作者 | ⬜ |
 | 5 | 文章模式 + 框选文本 | "使用已框选内容" + 仅框选部分 | ⬜ |
 | 6 | 推特模式 + 普通推文 + Database | Author/URL/Date/Tags 写入 schema | ⬜ |

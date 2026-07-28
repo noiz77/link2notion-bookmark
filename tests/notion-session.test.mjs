@@ -20,6 +20,7 @@ async function loadModules(moduleNames) {
     });
 
     let capturedRequest = null;
+    let executeScriptCount = 0;
     context.fetch = async (url, options) => {
         capturedRequest = { url, options };
         return new Response(JSON.stringify({
@@ -59,9 +60,12 @@ async function loadModules(moduleNames) {
             }
         },
         scripting: {
-            executeScript: async ({ func, args = [] }) => [{
-                result: await func(...args)
-            }]
+            executeScript: async ({ func, args = [] }) => {
+                executeScriptCount += 1;
+                return [{
+                    result: await func(...args)
+                }];
+            }
         }
     };
 
@@ -99,7 +103,8 @@ async function loadModules(moduleNames) {
 
     return {
         modules,
-        getCapturedRequest: () => capturedRequest
+        getCapturedRequest: () => capturedRequest,
+        getExecuteScriptCount: () => executeScriptCount
     };
 }
 
@@ -113,8 +118,8 @@ test("getCurrentUserId follows the selected Notion tab instead of a stale cross-
     assert.equal(userId, APP_USER_ID);
 });
 
-test("notionFetch aligns the active-user header with the selected tab session", async () => {
-    const { modules, getCapturedRequest } = await loadModules([
+test("notionFetch aligns the active-user header in the same page-script round trip", async () => {
+    const { modules, getCapturedRequest, getExecuteScriptCount } = await loadModules([
         "notion/session.js",
         "notion/api.js"
     ]);
@@ -134,4 +139,5 @@ test("notionFetch aligns the active-user header with the selected tab session", 
         request.options.headers["x-notion-active-user-header"],
         APP_USER_ID
     );
+    assert.equal(getExecuteScriptCount(), 1);
 });

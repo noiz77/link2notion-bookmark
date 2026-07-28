@@ -12,6 +12,7 @@ test("session validation failures open a persistent recovery guide", async () =>
     assert.match(pageInfo, /NOTION_SESSION_VALIDATION_FAILED/);
     assert.match(mainFlow, /Notion 登录信息可能已失效/);
     assert.match(mainFlow, /help\/notion-session\.html/);
+    assert.match(mainFlow, /chrome\.tabs\.create/);
     assert.match(helpPage, /notion\.so/);
     assert.match(helpPage, /app\.notion\.com/);
     assert.match(helpPage, /网站数据/);

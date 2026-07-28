@@ -3,7 +3,12 @@ import fs from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-async function getPageInfoFor(targetValue, collections = {}, nestedRecordValue = false) {
+async function getPageInfoFor(
+    targetValue,
+    collections = {},
+    nestedRecordValue = false,
+    additionalBlocks = {}
+) {
     const pageId = targetValue.id;
     const context = vm.createContext({
         console,
@@ -20,6 +25,7 @@ async function getPageInfoFor(targetValue, collections = {}, nestedRecordValue =
             return new Response(JSON.stringify({
                 recordMap: {
                     block: {
+                        ...additionalBlocks,
                         [pageId]: nestedRecordValue
                             ? { value: { value: targetValue, role: "editor" } }
                             : { value: targetValue }
@@ -102,6 +108,27 @@ test("a database row accepts child blocks when Notion wraps block values twice",
     assert.equal(result.isDatabase, true);
     assert.equal(result.collectionId, "database");
     assert.equal(result.canAcceptChildBlocks, true);
+});
+
+test("spaceId fallback unwraps other double-wrapped block records", async () => {
+    const result = await getPageInfoFor({
+        id: "target-page",
+        type: "page",
+        parent_table: "block"
+    }, {}, false, {
+        sibling: {
+            value: {
+                value: {
+                    id: "sibling",
+                    type: "page",
+                    space_id: "nested-space"
+                },
+                role: "reader"
+            }
+        }
+    });
+
+    assert.equal(result.spaceId, "nested-space");
 });
 
 test("bookmark flow checks child-block capability instead of database identity", async () => {
