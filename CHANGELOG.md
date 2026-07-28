@@ -2,7 +2,7 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
-## [5.2.8] - 2026-07-28
+## [5.2.9] - 2026-07-28
 
 ### Fixed
 - **Dia 中 Notion 跨域会话混用**：用户 ID 改为优先读取实际执行请求的 Notion 标签页会话；每次内部 API 请求发送前再次将 active user header 与该标签页对齐，避免 `www.notion.so` 的旧 Cookie 与 `app.notion.com` 当前账号混用后返回 HTTP 200 + 空 `recordMap`。
