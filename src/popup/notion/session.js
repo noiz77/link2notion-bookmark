@@ -62,8 +62,10 @@ export async function getNotionTab(userId = null) {
     const preferredOrigins = await getPreferredNotionOrigins(userId);
     const tabs = await chrome.tabs.query({ url: NOTION_TAB_PATTERNS });
     const orderedTabs = [
-        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab))),
-        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)))
+        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab)) && tab.active),
+        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab)) && !tab.active),
+        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)) && tab.active),
+        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)) && !tab.active)
     ];
 
     const readyTab = orderedTabs.find(tab => tab.id && tab.status === "complete");

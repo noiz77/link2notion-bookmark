@@ -55,7 +55,7 @@
 ### 二、 常见故障与修复 (Troubleshooting)
 1. **无法读取页面信息 / 提示登录或权限异常**
 * 原因：Notion 登录会话失效、当前账号没有目标页面编辑权限，或 Notion 内部 v3 API 临时调整。
-* 解决：新开标签页访问 `www.notion.so` 或 `app.notion.com`，确认左侧边栏出现内容；再打开目标 Notion 页面，确认当前账号可编辑后重试。
+* 解决：优先点击错误卡片中的「查看重新登录步骤」。退出 Notion 后，在浏览器设置中搜索“网站数据”或“Cookie”，仅删除 `notion.so` 与 `app.notion.com` 的网站数据，再重新登录并重试；无需清除浏览历史、书签或保存的密码。
 * 反馈：如果仍失败，点击错误区的「复制诊断信息」并提交给维护者。诊断信息不包含 cookie/token，只包含浏览器环境、Notion 标签页状态、用户 ID 是否可推断、`getSpaces` / `loadPageChunk` 状态和 `recordMap` 计数。
   
 2. **连接异常：报错 "数据异常"**

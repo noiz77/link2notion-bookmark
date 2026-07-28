@@ -107,6 +107,8 @@ src/popup/
 - `extractors/tweet-syndication.js` — 推文 syndication 元数据抓取
 - `notion/tags.js` — Database 标签写入辅助
 - `notion/api.js` — Notion 内部 API 同站点请求代理
+- `notion/page-context.js` — Notion 页面上下文中的用户推断与同站点请求执行
+- `ui/notion-error.js` — Notion 错误卡片、恢复帮助入口与诊断复制交互
 
 ## 静态检查结果
 
@@ -244,7 +246,8 @@ import './main-flow.js';
 |---|---|---|---|
 | 1 | 书签模式 + 普通页面 + 封面开 | 封面 + bookmark 卡片 | ⬜ |
 | 2 | 书签模式 + 封面关 | 仅 bookmark | ⬜ |
-| 3 | 书签模式 + Database 页面 | 显示"与 Database 不兼容"警告 | ⬜ |
+| 3a | 书签模式 + Database 视图 | 提示选择普通页面或 Database 中的单个页面 | ⬜ |
+| 3b | 书签模式 + Database 单页 | bookmark 写入该页面正文 | ✅ Chrome 真实环境验证 |
 | 4 | 文章模式 + 普通页面（Readability 自动）| 段落/图片/作者 | ⬜ |
 | 5 | 文章模式 + 框选文本 | "使用已框选内容" + 仅框选部分 | ⬜ |
 | 6 | 推特模式 + 普通推文 + Database | Author/URL/Date/Tags 写入 schema | ⬜ |

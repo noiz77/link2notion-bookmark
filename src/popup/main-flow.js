@@ -13,7 +13,7 @@ import { getPageInfo } from './notion/page-info.js';
 import { createFullBookmark, createImageBlock } from './notion/bookmark.js';
 import { createDatabasePageFromThread, createNotionPageFromThread } from './notion/tweet-writer.js';
 import { createDatabasePageFromArticle, createNotionPageFromArticle } from './notion/article-writer.js';
-import { buildNotionDiagnostics } from './notion/diagnostics.js';
+import { showErrorWithDiagnostics } from './ui/notion-error.js';
 import { showProgress, updateProgressText, hideProgress, completeProgress } from './ui/progress.js';
 
 // ESM 模块顶层执行时 DOM 已就绪
@@ -21,81 +21,6 @@ const _btnImport = document.getElementById('btnImport');
 const _importForm = document.getElementById('importForm');
 const _status = document.getElementById('status');
 let _pendingDismiss = null;
-
-function isNotionAccessError(error) {
-    const message = error?.message || '';
-    return /Notion|页面信息|登录|权限|loadPageChunk|saveTransactions|syncRecordValues|recordMap|active user|HTTP 401|HTTP 403/i.test(message);
-}
-
-async function copyText(text) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    textarea.remove();
-}
-
-async function showErrorWithDiagnostics(error, pageId) {
-    _status.textContent = '';
-    _status.style.color = 'red';
-
-    const message = document.createElement('div');
-    message.textContent = `❌ ${error.message}`;
-    _status.appendChild(message);
-
-    if (!pageId || !isNotionAccessError(error)) return;
-
-    const links = document.createElement('div');
-    links.className = 'notion-login-links';
-    links.appendChild(document.createTextNode('先确认 Notion 已登录：'));
-    for (const [label, url] of [['www.notion.so', 'https://www.notion.so'], ['app.notion.com', 'https://app.notion.com']]) {
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = label;
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            chrome.tabs.create({ url });
-        });
-        links.appendChild(link);
-    }
-    _status.appendChild(links);
-
-    const hint = document.createElement('div');
-    hint.className = 'diagnostic-hint';
-    hint.textContent = '正在生成 Notion 诊断信息...';
-    _status.appendChild(hint);
-
-    try {
-        const report = await buildNotionDiagnostics(pageId);
-        hint.textContent = 'Notion 权限或 API 异常，可复制诊断信息反馈。';
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'diagnostic-btn';
-        button.textContent = '复制诊断信息';
-        button.addEventListener('click', async () => {
-            try {
-                await copyText(report);
-                button.textContent = '已复制';
-            } catch (copyError) {
-                console.error(copyError);
-                button.textContent = '复制失败';
-            }
-        });
-        _status.appendChild(button);
-    } catch (diagnosticError) {
-        console.warn('[link2notion] 生成 Notion 诊断信息失败:', diagnosticError);
-        hint.textContent = `诊断信息生成失败：${diagnosticError.message}`;
-    }
-}
 
 document.getElementById('btnImport').addEventListener('click', async () => {
     const rawInput = document.getElementById('pageId').value.trim();
@@ -266,12 +191,12 @@ document.getElementById('btnImport').addEventListener('click', async () => {
 
     try {
         const userId = await getCurrentUserId();
-        const { spaceId, isDatabase } = await getPageInfo(pageId, userId);
+        const { spaceId, canAcceptChildBlocks } = await getPageInfo(pageId, userId);
 
-        if (isDatabase) {
+        if (!canAcceptChildBlocks) {
             const styleLabel = isBatchMode ? "批量书签" : "书签";
             hideProgress();
-            _status.innerText = `⚠️ ${styleLabel}样式与Database不兼容，导入无效`;
+            _status.innerText = `⚠️ ${styleLabel}不能直接导入到 Database 视图，请选择普通页面或 Database 中的单个页面`;
             _status.style.color = "orange";
             const dismissWarning = () => {
                 _status.innerText = "";
