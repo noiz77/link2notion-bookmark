@@ -2,7 +2,7 @@
 // 用户阻止第三方 Cookie 时，扩展 popup 直接 fetch 不会带上 Notion 会话；
 // 改在已打开的 Notion 标签页中执行同站点请求。
 
-import { getNotionTab, getTabOrigin } from './session.js';
+import { getNotionTab, getNotionTabUserId, getTabOrigin } from './session.js';
 
 function getActiveUserId(options) {
     const headers = options.headers || {};
@@ -37,6 +37,14 @@ export async function notionFetch(path, options = {}) {
     }
 
     const requestOptions = normalizeRequestOptions(options);
+    const tabUserId = await getNotionTabUserId(tab).catch(error => {
+        console.warn("[link2notion] 无法确认 Notion 标签页用户 ID:", error);
+        return null;
+    });
+    if (tabUserId) {
+        requestOptions.headers["x-notion-active-user-header"] = tabUserId;
+        delete requestOptions.headers["X-Notion-Active-User-Header"];
+    }
 
     const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },

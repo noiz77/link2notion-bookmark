@@ -2,6 +2,15 @@
 
 All notable changes to the **Notion 导入助手 (Notion Import Assistant)** project will be documented in this file.
 
+## [5.2.8] - 2026-07-28
+
+### Fixed
+- **Dia 中 Notion 跨域会话混用**：用户 ID 改为优先读取实际执行请求的 Notion 标签页会话；每次内部 API 请求发送前再次将 active user header 与该标签页对齐，避免 `www.notion.so` 的旧 Cookie 与 `app.notion.com` 当前账号混用后返回 HTTP 200 + 空 `recordMap`。
+- **Notion 登录状态失败提示不可操作**：空页面数据错误改为简短恢复卡片，并提供「查看重新登录步骤」按钮。完整步骤在独立帮助标签页中展示，说明如何仅删除 `notion.so` / `app.notion.com` 网站数据，以及找不到设置时的备用清理方法，不会撑高扩展弹窗。
+
+### Internal
+- 新增跨域 Cookie 不一致的会话回归测试，以及恢复帮助页内容与入口检查。
+
 ## [5.2.7] - 2026-06-04
 
 ### Fixed

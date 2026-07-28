@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复 Notion 登录状态｜Notion 导入助手</title>
+    <link rel="stylesheet" href="notion-session.css">
+</head>
+<body>
+    <main class="page-shell">
+        <section class="recovery-card">
+            <div class="brand">🐜 Notion 导入助手</div>
+            <div class="status-icon" aria-hidden="true">!</div>
+            <h1>重新建立 Notion 登录状态</h1>
+            <p class="lead">扩展检测到 Notion 登录数据可能已经失效或发生冲突。请只删除 Notion 的网站数据，然后重新登录。</p>
+
+            <ol class="steps">
+                <li>
+                    <span class="step-number">1</span>
+                    <div>
+                        <strong>退出 Notion 并关闭页面</strong>
+                        <p>退出当前 Notion 账号，然后关闭所有 Notion 标签页。</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">2</span>
+                    <div>
+                        <strong>打开浏览器设置</strong>
+                        <p>在设置页面搜索“网站数据”或“Cookie”。不同浏览器的菜单名称可能略有不同。</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">3</span>
+                    <div>
+                        <strong>删除 Notion 网站数据</strong>
+                        <p>在网站数据管理页面搜索 <code>notion</code>，删除以下两个域名的数据：</p>
+                        <div class="domain-list">
+                            <code>notion.so</code>
+                            <code>app.notion.com</code>
+                        </div>
+                    </div>
+                </li>
+                <li>
+                    <span class="step-number">4</span>
+                    <div>
+                        <strong>重新登录并重试</strong>
+                        <p>重新打开 Notion，完成登录后返回目标页面，再次点击扩展。</p>
+                    </div>
+                </li>
+            </ol>
+
+            <div class="safe-note">
+                <strong>无需清除全部浏览记录</strong>
+                <span>不需要删除浏览历史、下载记录、书签或保存的密码。</span>
+            </div>
+
+            <a class="primary-action" href="https://www.notion.so" target="_blank" rel="noreferrer">重新打开 Notion</a>
+
+            <details>
+                <summary>找不到网站数据设置？查看备用方法</summary>
+                <div class="fallback">
+                    <p>打开浏览器的“清除浏览数据”功能，将时间范围设为“全部时间”，只勾选“Cookie 和其他网站数据”后清除。</p>
+                    <p class="warning">这种方式会退出其他网站的登录状态。建议优先使用上面的“仅删除 Notion 网站数据”方法。</p>
+                </div>
+            </details>
+        </section>
+    </main>
+</body>
+</html>

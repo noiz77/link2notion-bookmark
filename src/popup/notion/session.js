@@ -16,6 +16,34 @@ export function getTabOrigin(tab) {
     }
 }
 
+export async function getNotionTabUserId(tab) {
+    if (!tab?.id) return null;
+
+    const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: async () => {
+            const cookieMatch = document.cookie.match(/(?:^|;\s*)notion_user_id=([^;]+)/);
+            if (cookieMatch?.[1]) return decodeURIComponent(cookieMatch[1]);
+
+            try {
+                const res = await fetch(`${location.origin}/api/v3/getSpaces`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: "{}"
+                });
+                const data = await res.json();
+                const notionUsers = data.notion_user || data.recordMap?.notion_user || {};
+                return Object.keys(notionUsers)[0] || null;
+            } catch (e) {
+                return null;
+            }
+        }
+    });
+
+    return results?.[0]?.result || null;
+}
+
 function waitForTabComplete(tabId, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
         let settled = false;
@@ -62,8 +90,10 @@ export async function getNotionTab(userId = null) {
     const preferredOrigins = await getPreferredNotionOrigins(userId);
     const tabs = await chrome.tabs.query({ url: NOTION_TAB_PATTERNS });
     const orderedTabs = [
-        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab))),
-        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)))
+        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab)) && tab.active),
+        ...tabs.filter(tab => preferredOrigins.includes(getTabOrigin(tab)) && !tab.active),
+        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)) && tab.active),
+        ...tabs.filter(tab => !preferredOrigins.includes(getTabOrigin(tab)) && !tab.active)
     ];
 
     const readyTab = orderedTabs.find(tab => tab.id && tab.status === "complete");

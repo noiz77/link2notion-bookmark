@@ -28,10 +28,13 @@ export async function getPageInfo(pageId, userId) {
         const detail = data.message || data.error || data.name;
         const blockCount = Object.keys(data.recordMap?.block || {}).length;
         const collectionCount = Object.keys(data.recordMap?.collection || {}).length;
-        const emptyHint = blockCount === 0 && collectionCount === 0
+        const isEmptyRecordMap = blockCount === 0 && collectionCount === 0;
+        const emptyHint = isEmptyRecordMap
             ? 'Notion 返回了空页面数据，通常是浏览器没有把 Notion 登录会话传给扩展，或当前账号没有该页面权限'
             : `Notion 返回了 ${blockCount} 个 block，但不包含目标页面`;
-        throw new Error(`无法读取页面信息：${emptyHint}。请确认页面链接、访问权限和 Notion 登录状态；可打开 https://www.notion.so 或 https://app.notion.com 重新确认登录${detail ? ': ' + detail : ''}`);
+        const error = new Error(`无法读取页面信息：${emptyHint}。请确认页面链接、访问权限和 Notion 登录状态${detail ? ': ' + detail : ''}`);
+        if (isEmptyRecordMap) error.code = 'NOTION_SESSION_VALIDATION_FAILED';
+        throw error;
     }
 
     const val = blockData.value;

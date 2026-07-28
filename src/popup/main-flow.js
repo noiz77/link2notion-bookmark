@@ -45,28 +45,43 @@ async function copyText(text) {
 
 async function showErrorWithDiagnostics(error, pageId) {
     _status.textContent = '';
-    _status.style.color = 'red';
+    _status.style.color = '';
 
-    const message = document.createElement('div');
-    message.textContent = `❌ ${error.message}`;
-    _status.appendChild(message);
+    const isSessionValidationError = error?.code === 'NOTION_SESSION_VALIDATION_FAILED';
+    if (isSessionValidationError) {
+        const card = document.createElement('div');
+        card.className = 'notion-session-card';
+
+        const title = document.createElement('div');
+        title.className = 'notion-session-title';
+        title.textContent = 'Notion 登录信息可能已失效';
+        card.appendChild(title);
+
+        const description = document.createElement('div');
+        description.className = 'notion-session-description';
+        description.textContent = '虽然页面显示为已登录，但扩展未能验证该页面的访问权限。请清除 Notion 网站数据并重新登录。';
+        card.appendChild(description);
+
+        const helpButton = document.createElement('button');
+        helpButton.type = 'button';
+        helpButton.className = 'notion-session-help-btn';
+        helpButton.textContent = '查看重新登录步骤';
+        helpButton.addEventListener('click', () => {
+            chrome.tabs.create({
+                url: chrome.runtime.getURL('help/notion-session.html')
+            });
+        });
+        card.appendChild(helpButton);
+
+        _status.appendChild(card);
+    } else {
+        const message = document.createElement('div');
+        message.className = 'error-message';
+        message.textContent = `❌ ${error.message}`;
+        _status.appendChild(message);
+    }
 
     if (!pageId || !isNotionAccessError(error)) return;
-
-    const links = document.createElement('div');
-    links.className = 'notion-login-links';
-    links.appendChild(document.createTextNode('先确认 Notion 已登录：'));
-    for (const [label, url] of [['www.notion.so', 'https://www.notion.so'], ['app.notion.com', 'https://app.notion.com']]) {
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = label;
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            chrome.tabs.create({ url });
-        });
-        links.appendChild(link);
-    }
-    _status.appendChild(links);
 
     const hint = document.createElement('div');
     hint.className = 'diagnostic-hint';
@@ -75,7 +90,9 @@ async function showErrorWithDiagnostics(error, pageId) {
 
     try {
         const report = await buildNotionDiagnostics(pageId);
-        hint.textContent = 'Notion 权限或 API 异常，可复制诊断信息反馈。';
+        hint.textContent = isSessionValidationError
+            ? '重新登录后仍然失败？请复制诊断信息反馈。'
+            : 'Notion 权限或 API 异常，可复制诊断信息反馈。';
 
         const button = document.createElement('button');
         button.type = 'button';

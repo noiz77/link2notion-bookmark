@@ -402,6 +402,48 @@ button#btnImport:disabled {
     min-height: 18px;
 }
 
+.error-message {
+    color: #c43d3d;
+}
+
+.notion-session-card {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid #ead9a6;
+    border-radius: 8px;
+    background: #fffaf0;
+    text-align: left;
+}
+
+.notion-session-title {
+    color: #684e12;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.notion-session-description {
+    margin-top: 6px;
+    color: #665b42;
+    line-height: 1.55;
+}
+
+.notion-session-help-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid #50A550;
+    border-radius: 5px;
+    background: #50A550;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.notion-session-help-btn:hover {
+    background: #468C46;
+}
+
 .diagnostic-hint {
     margin-top: 6px;
     color: #666;
