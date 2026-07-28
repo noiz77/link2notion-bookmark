@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-async function getPageInfoFor(targetValue, collections = {}) {
+async function getPageInfoFor(targetValue, collections = {}, nestedRecordValue = false) {
     const pageId = targetValue.id;
     const context = vm.createContext({
         console,
@@ -20,7 +20,9 @@ async function getPageInfoFor(targetValue, collections = {}) {
             return new Response(JSON.stringify({
                 recordMap: {
                     block: {
-                        [pageId]: { value: targetValue }
+                        [pageId]: nestedRecordValue
+                            ? { value: { value: targetValue, role: "editor" } }
+                            : { value: targetValue }
                     },
                     collection: collections
                 }
@@ -80,6 +82,26 @@ test("a database view is still rejected as a child-block target", async () => {
 
     assert.equal(result.isDatabase, true);
     assert.equal(result.canAcceptChildBlocks, false);
+});
+
+test("a database row accepts child blocks when Notion wraps block values twice", async () => {
+    const result = await getPageInfoFor({
+        id: "628a324e-4556-47fa-8b09-8c99affaf7a8",
+        type: "page",
+        parent_table: "collection",
+        parent_id: "database",
+        space_id: "space"
+    }, {
+        database: {
+            value: {
+                schema: {}
+            }
+        }
+    }, true);
+
+    assert.equal(result.isDatabase, true);
+    assert.equal(result.collectionId, "database");
+    assert.equal(result.canAcceptChildBlocks, true);
 });
 
 test("bookmark flow checks child-block capability instead of database identity", async () => {

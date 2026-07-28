@@ -37,7 +37,12 @@ export async function getPageInfo(pageId, userId) {
         throw error;
     }
 
-    const val = blockData.value;
+    // Notion 的 block 记录存在两种结构：
+    // { value: block } 与 { value: { value: block, role } }
+    const nestedValue = blockData.value?.value;
+    const val = nestedValue && typeof nestedValue === 'object' && nestedValue.type
+        ? nestedValue
+        : blockData.value;
 
     // spaceId 兜底：当前块可能缺失，从 recordMap 中其他块或 space 获取
     let spaceId = val.space_id;
